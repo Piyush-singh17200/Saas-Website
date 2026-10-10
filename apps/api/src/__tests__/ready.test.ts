@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import { createApp } from "../app.js";
 import * as dbModule from "@workspace/database";
+import * as redisModule from "../lib/redis.js";
 import { createMockDatabaseHealth } from "@workspace/test-utils";
 
 vi.mock("@workspace/database", async (importOriginal) => {
@@ -12,6 +13,14 @@ vi.mock("@workspace/database", async (importOriginal) => {
   };
 });
 
+vi.mock("../lib/redis.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof redisModule>();
+  return {
+    ...actual,
+    checkRedisConnection: vi.fn(),
+  };
+});
+
 describe("GET /api/v1/ready", () => {
   const app = createApp();
 
@@ -19,10 +28,14 @@ describe("GET /api/v1/ready", () => {
     vi.clearAllMocks();
   });
 
-  it("returns 200 OK and ready status when database is connected", async () => {
+  it("returns 200 OK and ready status when database and redis are connected", async () => {
     vi.mocked(dbModule.checkDatabaseConnection).mockResolvedValueOnce(
       createMockDatabaseHealth(true, 12),
     );
+    vi.mocked(redisModule.checkRedisConnection).mockResolvedValueOnce({
+      ok: true,
+      latencyMs: 5,
+    });
 
     const res = await request(app).get("/api/v1/ready");
 
@@ -31,12 +44,17 @@ describe("GET /api/v1/ready", () => {
     expect(res.body.data.status).toBe("ready");
     expect(res.body.data.checks.database.status).toBe("connected");
     expect(res.body.data.checks.database.latencyMs).toBe(12);
+    expect(res.body.data.checks.redis.status).toBe("connected");
   });
 
   it("returns 503 Service Unavailable and not_ready status when database fails", async () => {
     vi.mocked(dbModule.checkDatabaseConnection).mockResolvedValueOnce(
       createMockDatabaseHealth(false, 35, "Database connection timeout"),
     );
+    vi.mocked(redisModule.checkRedisConnection).mockResolvedValueOnce({
+      ok: true,
+      latencyMs: 5,
+    });
 
     const res = await request(app).get("/api/v1/ready");
 
@@ -50,3 +68,4 @@ describe("GET /api/v1/ready", () => {
     );
   });
 });
+

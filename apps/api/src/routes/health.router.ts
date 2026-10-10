@@ -7,6 +7,7 @@ import {
   type ReadinessData,
 } from "@workspace/contracts";
 import { checkDatabaseConnection } from "@workspace/database";
+import { checkRedisConnection } from "../lib/redis.js";
 
 export const healthRouter: Router = Router();
 
@@ -28,11 +29,14 @@ healthRouter.get("/health", (req: Request, res: Response) => {
 });
 
 /**
- * Readiness probe: checks downstream dependencies (e.g., PostgreSQL).
- * Returns 200 if all critical systems are operational, otherwise 503.
+ * Readiness probe: checks downstream dependencies (PostgreSQL and Redis).
+ * Returns 200 if critical dependencies are connected, otherwise 503.
  */
 healthRouter.get("/ready", async (req: Request, res: Response) => {
-  const dbHealth = await checkDatabaseConnection();
+  const [dbHealth, redisHealth] = await Promise.all([
+    checkDatabaseConnection(),
+    checkRedisConnection(),
+  ]);
 
   const isReady = dbHealth.ok;
 
@@ -47,6 +51,13 @@ healthRouter.get("/ready", async (req: Request, res: Response) => {
           ? { latencyMs: dbHealth.latencyMs }
           : {}),
         ...(dbHealth.error ? { message: dbHealth.error } : {}),
+      },
+      redis: {
+        status: redisHealth.ok ? "connected" : "disconnected",
+        ...(redisHealth.latencyMs !== undefined
+          ? { latencyMs: redisHealth.latencyMs }
+          : {}),
+        ...(redisHealth.error ? { message: redisHealth.error } : {}),
       },
     },
     timestamp: new Date().toISOString(),

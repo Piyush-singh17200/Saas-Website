@@ -7,7 +7,190 @@ generator client {
   provider = "prisma-client-js"
 }
 
-/// Minimal foundation entity for connectivity checks and migration validation
+enum AccountStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+/// Core user entity
+model User {
+  id           String        @id @default(uuid()) @db.Uuid
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  displayName  String        @map("display_name")
+  status       AccountStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  disabledAt   DateTime?     @map("disabled_at")
+
+  // Relations
+  sessions             Session[]
+  memberships          Membership[]
+  createdOrganizations Organization[] @relation("OrganizationCreator")
+  sentInvitations      Invitation[]   @relation("InvitedByUser")
+  actorAuditLogs       AuditLog[]     @relation("AuditActor")
+  createdProjects      Project[]      @relation("ProjectCreator")
+  assignedTasks        Task[]         @relation("TaskAssignee")
+  createdTasks         Task[]         @relation("TaskCreator")
+  comments             Comment[]      @relation("CommentAuthor")
+  actorActivityLogs    ActivityLog[]  @relation("ActivityActor")
+  notifications        Notification[]
+
+  @@index([email])
+  @@map("users")
+}
+
+/// User session with securely hashed bearer token
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Tenant boundary organization
+model Organization {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String    @unique
+  creatorId String    @map("creator_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  creator       User           @relation("OrganizationCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  memberships   Membership[]
+  invitations   Invitation[]
+  auditLogs     AuditLog[]
+  projects      Project[]
+  tasks         Task[]
+  comments      Comment[]
+  activityLogs  ActivityLog[]
+  subscription  Subscription?
+  notifications Notification[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+/// Association between User and Organization
+model Membership {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           MembershipRole   @default(MEMBER)
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  joinedAt       DateTime?        @map("joined_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId], name: "org_user_membership_unique")
+  @@index([userId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+/// Invitations to join an organization
+model Invitation {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  email          String
+  role           MembershipRole @default(MEMBER)
+  tokenHash      String         @unique @map("token_hash")
+  inviterId      String         @map("inviter_id") @db.Uuid
+  expiresAt      DateTime       @map("expires_at")
+  acceptedAt     DateTime?      @map("accepted_at")
+  revokedAt      DateTime?      @map("revoked_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviter      User         @relation("InvitedByUser", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([tokenHash])
+  @@map("invitations")
+}
+
+/// Security and mutation audit log
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  actorId        String?  @map("actor_id") @db.Uuid
+  action         String
+  targetType     String?  @map("target_type")
+  targetId       String?  @map("target_id")
+  requestId      String?  @map("request_id")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor        User?         @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+/// Retained foundation entity for connectivity checks
 model SystemCheck {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
@@ -16,3 +199,177 @@ model SystemCheck {
 
   @@map("system_checks")
 }
+
+/// Project within an organization
+model Project {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  name           String
+  slug           String
+  description    String?
+  status         ProjectStatus @default(ACTIVE)
+  createdById    String        @map("created_by_id") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  archivedAt     DateTime?     @map("archived_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  tasks        Task[]
+
+  @@unique([organizationId, slug], name: "org_project_slug_unique")
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("projects")
+}
+
+/// Task item in a project
+model Task {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  projectId      String       @map("project_id") @db.Uuid
+  title          String
+  description    String?
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  assigneeId     String?      @map("assignee_id") @db.Uuid
+  createdById    String       @map("created_by_id") @db.Uuid
+  dueDate        DateTime?    @map("due_date")
+  position       Float        @default(0)
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  completedAt    DateTime?    @map("completed_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy    User         @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  comments     Comment[]
+
+  @@index([projectId, status])
+  @@index([projectId, position])
+  @@index([organizationId, assigneeId])
+  @@index([organizationId, dueDate])
+  @@index([organizationId, createdAt])
+  @@map("tasks")
+}
+
+/// Task comment
+model Comment {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  taskId         String    @map("task_id") @db.Uuid
+  authorId       String    @map("author_id") @db.Uuid
+  body           String    @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task         Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author       User         @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("comments")
+}
+
+/// Tenant business activity stream
+model ActivityLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  actorId        String?  @map("actor_id") @db.Uuid
+  eventType      String   @map("event_type")
+  entityType     String   @map("entity_type")
+  entityId       String   @map("entity_id")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entityType, entityId])
+  @@index([actorId])
+  @@map("activity_logs")
+}
+
+/// Organization billing subscription state
+model Subscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  organizationId       String             @unique @map("organization_id") @db.Uuid
+  stripeCustomerId     String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  stripePriceId        String?            @map("stripe_price_id")
+  plan                 SubscriptionPlan   @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  canceledAt           DateTime?          @map("canceled_at")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+  @@index([organizationId, status])
+  @@map("subscriptions")
+}
+
+/// Idempotency record for Stripe webhook events
+model WebhookEvent {
+  id          String   @id
+  eventType   String   @map("event_type")
+  processedAt DateTime @default(now()) @map("processed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  data        Json?
+
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("webhook_events")
+}
+
+/// Tenant user notification
+model Notification {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  type           String
+  title          String
+  body           String    @db.Text
+  readAt         DateTime? @map("read_at")
+  metadata       Json?
+  idempotencyKey String?   @unique @map("idempotency_key")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([organizationId, createdAt])
+  @@map("notifications")
+}
+
+/// Transactional outbox for guaranteed asynchronous delivery
+model OutboxMessage {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  queueName      String    @map("queue_name")
+  jobName        String    @map("job_name")
+  payload        Json
+  idempotencyKey String    @unique @map("idempotency_key")
+  status         String    @default("PENDING")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  processedAt    DateTime? @map("processed_at")
+
+  @@index([status, createdAt])
+  @@index([queueName, status])
+  @@map("outbox_messages")
+}
+
+

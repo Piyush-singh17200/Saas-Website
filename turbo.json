@@ -1,5 +1,15 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "DATABASE_URL",
+    "TEST_DATABASE_URL",
+    "NODE_ENV",
+    "PORT",
+    "SESSION_COOKIE_NAME",
+    "SESSION_TTL_DAYS",
+    "COOKIE_SECURE",
+    "NEXT_PUBLIC_API_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

@@ -106,3 +106,30 @@ In upcoming milestones, WorkSpace will enforce strict organizational multi-tenan
   pnpm --filter @workspace/database db:migrate:deploy
   ```
   Applies pre-calculated migrations non-interactively without prompting.
+
+---
+
+## 7. Billing, Subscriptions & Entitlement Architecture
+
+In Phase 4, WorkSpace integrates an organization-level Stripe Billing and server-side entitlement subsystem:
+
+```mermaid
+graph TD
+    User([Tenant Owner / Admin]) -->|POST /billing/checkout| API[Express API]
+    API -->|Stripe SDK| StripeCheckout[Stripe Hosted Checkout]
+    StripeCheckout -->|Webhook Event| WebhookHandler[POST /billing/webhook]
+    WebhookHandler -->|Signature Verification| StripeVerify{Valid Signature?}
+    StripeVerify -->|No| Reject[400 Bad Request]
+    StripeVerify -->|Yes| IdempotencyCheck{WebhookEvent Exists?}
+    IdempotencyCheck -->|Duplicate| AckDuplicate[200 OK duplicate: true]
+    IdempotencyCheck -->|New| Tx[PostgreSQL Transaction]
+    Tx --> UpdateSub[Update Subscription State]
+    Tx --> RecordEvent[Insert WebhookEvent ID]
+    API --> EntitlementService[Entitlement Engine]
+    EntitlementService -->|SELECT FOR UPDATE| OrgLock[Atomic Concurrency Lock]
+```
+
+- **Entitlement Isolation**: Project limits and member seat allocations are enforced atomically via PostgreSQL row locking (`SELECT id FROM organizations WHERE id = $1 FOR UPDATE`).
+- **Signature Integrity**: Webhooks verify raw request buffer HMAC signatures prior to payload processing.
+- **Durable Deduplication**: Webhook events persist unique Stripe event IDs in `WebhookEvent` table to prevent repeated side-effects.
+- **Safe Downgrades**: Downgrading or canceling preserves existing projects and members while restricting new resource creation.

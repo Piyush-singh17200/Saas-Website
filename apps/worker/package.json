@@ -8,15 +8,22 @@
     "start": "node dist/index.js",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No worker tests configured yet for foundation phase\""
+    "test": "vitest run"
   },
   "dependencies": {
-    "dotenv": "^16.4.7"
+    "@workspace/contracts": "workspace:*",
+    "@workspace/database": "workspace:*",
+    "bullmq": "^6.3.12",
+    "dotenv": "^16.4.7",
+    "ioredis": "^6.0.0",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
     "@workspace/config": "workspace:*",
+    "ioredis-mock": "^8.13.1",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^5.0.3"
   }
 }
