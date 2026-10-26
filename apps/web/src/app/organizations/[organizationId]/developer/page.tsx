@@ -670,7 +670,9 @@ export default function OrganizationDeveloperPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <caption className="sr-only">Configured Webhook Endpoints</caption>
+                  <caption className="sr-only">
+                    Configured Webhook Endpoints
+                  </caption>
                   <thead className="bg-slate-950/60 text-slate-400 text-xs uppercase font-mono border-b border-slate-800">
                     <tr>
                       <th className="py-3 px-4">Endpoint URL</th>
@@ -805,7 +807,9 @@ export default function OrganizationDeveloperPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <caption className="sr-only">Webhook Event Delivery History</caption>
+                  <caption className="sr-only">
+                    Webhook Event Delivery History
+                  </caption>
                   <thead className="bg-slate-950/60 text-slate-400 text-xs uppercase font-mono border-b border-slate-800">
                     <tr>
                       <th className="py-3 px-4">Event Type</th>

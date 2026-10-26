@@ -126,9 +126,7 @@ test.describe("E2E User Journey: Developer Platform & Webhooks", () => {
     ).toBeVisible();
     await expect(page.getByText("CI/CD Deployment Key")).toBeVisible();
     await expect(page.getByText(/wsp_live_c1a2/)).toBeVisible();
-    await expect(
-      page.getByText("tasks:read", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("tasks:read", { exact: true })).toBeVisible();
 
     // Verify Create API Key button exists
     await expect(

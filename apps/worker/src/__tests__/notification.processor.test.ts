@@ -4,12 +4,13 @@ import { randomUUID } from "node:crypto";
 import { UnrecoverableError } from "bullmq";
 import { processNotificationJob } from "../processors/notification.processor.js";
 import { emailProvider } from "../services/email.service.js";
+import { testDatabaseUrl } from "./test-env.js";
 
 describe("Notification Processor & Tenant Isolation", () => {
   const db = new PrismaClient({
     datasources: {
       db: {
-        url: "postgresql://workspace_user:workspace_pass@127.0.0.1:5433/workspace_test?schema=public",
+        url: testDatabaseUrl,
       },
     },
   });

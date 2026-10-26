@@ -361,7 +361,9 @@ export default function OrganizationSecurityPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <caption className="sr-only">Security and Audit Activity Log</caption>
+                <caption className="sr-only">
+                  Security and Audit Activity Log
+                </caption>
                 <thead>
                   <tr className="border-b border-slate-800 text-slate-400 font-mono">
                     <th className="py-3 px-3">Status</th>

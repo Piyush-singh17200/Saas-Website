@@ -26,7 +26,8 @@ export class EmailService {
         recipient: recipientEmail,
         messageId,
         // In local development, provide link for developer convenience
-        resetLink: env.NODE_ENV === "development" ? resetLink : "[REDACTED_IN_TEST]",
+        resetLink:
+          env.NODE_ENV === "development" ? resetLink : "[REDACTED_IN_TEST]",
       });
 
       return {
@@ -63,7 +64,9 @@ export class EmailService {
         recipient: recipientEmail,
         messageId,
         verificationLink:
-          env.NODE_ENV === "development" ? verificationLink : "[REDACTED_IN_TEST]",
+          env.NODE_ENV === "development"
+            ? verificationLink
+            : "[REDACTED_IN_TEST]",
       });
 
       return {

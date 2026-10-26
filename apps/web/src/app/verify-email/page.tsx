@@ -17,9 +17,9 @@ function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
 
-  const [status, setStatus] = useState<"idle" | "verifying" | "success" | "error">(
-    token ? "verifying" : "idle"
-  );
+  const [status, setStatus] = useState<
+    "idle" | "verifying" | "success" | "error"
+  >(token ? "verifying" : "idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Resend state
@@ -42,9 +42,13 @@ function VerifyEmailContent() {
         if (isMounted) {
           setStatus("error");
           if (err instanceof ApiError) {
-            setErrorMessage(err.message || "Invalid or expired verification link.");
+            setErrorMessage(
+              err.message || "Invalid or expired verification link.",
+            );
           } else {
-            setErrorMessage("Failed to verify email. Please try again or request a new link.");
+            setErrorMessage(
+              "Failed to verify email. Please try again or request a new link.",
+            );
           }
         }
       }
@@ -88,7 +92,10 @@ function VerifyEmailContent() {
       <div className="absolute bottom-10 right-10 w-[300px] h-[300px] bg-teal-500/5 rounded-full blur-2xl pointer-events-none -z-10" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <Link href="/" className="flex items-center justify-center gap-3 group mb-2">
+        <Link
+          href="/"
+          className="flex items-center justify-center gap-3 group mb-2"
+        >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-[1px] shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
             <div className="w-full h-full bg-slate-950 rounded-[11px] flex items-center justify-center text-emerald-400 font-bold text-xl">
               W
@@ -112,7 +119,9 @@ function VerifyEmailContent() {
           {status === "verifying" && (
             <div className="text-center py-6 space-y-4">
               <Loader2 className="w-10 h-10 animate-spin text-emerald-400 mx-auto" />
-              <h3 className="text-base font-semibold text-white">Verifying your email...</h3>
+              <h3 className="text-base font-semibold text-white">
+                Verifying your email...
+              </h3>
               <p className="text-xs text-slate-400">
                 Please wait while we confirm your security verification token.
               </p>
@@ -126,9 +135,12 @@ function VerifyEmailContent() {
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">Email Confirmed!</h3>
+                <h3 className="text-base font-semibold text-white">
+                  Email Confirmed!
+                </h3>
                 <p className="mt-2 text-xs text-slate-400 leading-relaxed">
-                  Your email address has been successfully verified. Your account is now fully trusted and ready for collaboration.
+                  Your email address has been successfully verified. Your
+                  account is now fully trusted and ready for collaboration.
                 </p>
               </div>
               <div className="pt-2">
@@ -149,7 +161,9 @@ function VerifyEmailContent() {
               {status === "error" && (
                 <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-300 text-xs">
                   <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
-                  <span>{errorMessage || "Invalid or expired verification link."}</span>
+                  <span>
+                    {errorMessage || "Invalid or expired verification link."}
+                  </span>
                 </div>
               )}
 
@@ -157,7 +171,8 @@ function VerifyEmailContent() {
                 <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-amber-300 text-xs">
                   <Mail className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
                   <span>
-                    No verification token was detected in your URL. You can request a new verification link below.
+                    No verification token was detected in your URL. You can
+                    request a new verification link below.
                   </span>
                 </div>
               )}
@@ -169,13 +184,16 @@ function VerifyEmailContent() {
                   <span>Resend Verification Email</span>
                 </h4>
                 <p className="text-xs text-slate-400 mb-4">
-                  Enter your email address and we&apos;ll send you a fresh verification link.
+                  Enter your email address and we&apos;ll send you a fresh
+                  verification link.
                 </p>
 
                 {resendSuccess && (
                   <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>A new verification link has been dispatched to your inbox.</span>
+                    <span>
+                      A new verification link has been dispatched to your inbox.
+                    </span>
                   </div>
                 )}
 

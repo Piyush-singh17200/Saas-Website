@@ -481,7 +481,9 @@ export default function OrganizationMembersPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-300">
-                <caption className="sr-only">Organization Active Members List</caption>
+                <caption className="sr-only">
+                  Organization Active Members List
+                </caption>
                 <thead className="bg-slate-950/40 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
                   <tr>
                     <th className="px-6 py-3.5">User</th>
@@ -628,7 +630,9 @@ export default function OrganizationMembersPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-300">
-                  <caption className="sr-only">Pending Organization Invitations</caption>
+                  <caption className="sr-only">
+                    Pending Organization Invitations
+                  </caption>
                   <thead className="bg-slate-950/40 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
                     <tr>
                       <th className="px-6 py-3.5">Recipient Email</th>

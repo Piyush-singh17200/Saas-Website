@@ -1,7 +1,12 @@
 import type { Request, Response, NextFunction } from "express";
-import { prisma, type MembershipRole } from "@workspace/database";
+import {
+  prisma,
+  withTenantTransaction,
+  type MembershipRole,
+} from "@workspace/database";
 import { AppError } from "./error-handler.js";
 import { ErrorCode } from "@workspace/contracts";
+import { continueWithinContext } from "../lib/response-context.js";
 
 /**
  * Resolves and verifies that the authenticated user has an active membership
@@ -12,7 +17,7 @@ import { ErrorCode } from "@workspace/contracts";
  */
 export async function requireActiveMembership(
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): Promise<void> {
   const orgParam = req.params.organizationId;
@@ -32,61 +37,67 @@ export async function requireActiveMembership(
   }
 
   try {
-    const membership = await prisma.membership.findFirst({
-      where: {
-        organizationId,
-        userId: user.id,
-        status: "ACTIVE",
-        organization: {
-          deletedAt: null,
+    // Open a tenant-scoped transaction for the remainder of the request. Every
+    // Prisma query executed through the context-aware client (including all
+    // downstream services) is constrained by PostgreSQL RLS until the response
+    // is sent. This also means a single request cannot observe another tenant.
+    await withTenantTransaction(organizationId, async () => {
+      const membership = await prisma.membership.findFirst({
+        where: {
+          organizationId,
+          userId: user.id,
+          status: "ACTIVE",
+          organization: {
+            deletedAt: null,
+          },
         },
-      },
-      include: {
-        organization: true,
-      },
-    });
+        include: {
+          organization: true,
+        },
+      });
 
-    if (!membership) {
-      // Non-disclosing 404 to avoid tenant ID discovery
-      return next(
-        new AppError("Organization not found", 404, ErrorCode.NOT_FOUND),
-      );
-    }
-
-    req.membership = membership;
-
-    // Enforce organization security policy (MFA enforcement and session age)
-    const policy = await prisma.organizationSecurityPolicy.findUnique({
-      where: { organizationId },
-    });
-
-    if (policy) {
-      if (policy.requireMfa && !user.mfaEnabled) {
+      if (!membership) {
+        // Non-disclosing 404 to avoid tenant ID discovery
         return next(
-          new AppError(
-            "Multi-Factor Authentication (MFA) is required by this organization. Please enroll in MFA in your account settings before accessing organization resources.",
-            403,
-            ErrorCode.FORBIDDEN,
-          ),
+          new AppError("Organization not found", 404, ErrorCode.NOT_FOUND),
         );
       }
 
-      if (req.session && policy.sessionMaxAgeMinutes) {
-        const maxAgeMs = policy.sessionMaxAgeMinutes * 60 * 1000;
-        const sessionAge = Date.now() - req.session.createdAt.getTime();
-        if (sessionAge > maxAgeMs) {
+      req.membership = membership;
+
+      // Enforce organization security policy (MFA enforcement and session age)
+      const policy = await prisma.organizationSecurityPolicy.findUnique({
+        where: { organizationId },
+      });
+
+      if (policy) {
+        if (policy.requireMfa && !user.mfaEnabled) {
           return next(
             new AppError(
-              "Your session duration exceeds this organization's maximum allowed session age. Please log in again.",
-              401,
-              ErrorCode.UNAUTHORIZED,
+              "Multi-Factor Authentication (MFA) is required by this organization. Please enroll in MFA in your account settings before accessing organization resources.",
+              403,
+              ErrorCode.FORBIDDEN,
             ),
           );
         }
-      }
-    }
 
-    next();
+        if (req.session && policy.sessionMaxAgeMinutes) {
+          const maxAgeMs = policy.sessionMaxAgeMinutes * 60 * 1000;
+          const sessionAge = Date.now() - req.session.createdAt.getTime();
+          if (sessionAge > maxAgeMs) {
+            return next(
+              new AppError(
+                "Your session duration exceeds this organization's maximum allowed session age. Please log in again.",
+                401,
+                ErrorCode.UNAUTHORIZED,
+              ),
+            );
+          }
+        }
+      }
+
+      await continueWithinContext(res, next);
+    });
   } catch (err) {
     next(err);
   }

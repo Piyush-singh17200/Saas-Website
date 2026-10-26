@@ -1,6 +1,12 @@
 import React from "react";
 import Link from "next/link";
-import { ShieldCheck, FileCheck, AlertCircle, Scale, ArrowLeft } from "lucide-react";
+import {
+  ShieldCheck,
+  FileCheck,
+  AlertCircle,
+  Scale,
+  ArrowLeft,
+} from "lucide-react";
 
 export default function TermsOfServicePage() {
   return (
@@ -12,7 +18,9 @@ export default function TermsOfServicePage() {
             <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm group-hover:scale-105 transition-transform">
               W
             </div>
-            <span className="font-semibold text-white tracking-tight">WorkSpace</span>
+            <span className="font-semibold text-white tracking-tight">
+              WorkSpace
+            </span>
           </Link>
           <Link
             href="/"
@@ -35,7 +43,8 @@ export default function TermsOfServicePage() {
             Terms of Service
           </h1>
           <p className="text-sm text-slate-400">
-            Last updated: October 2026 • Governing terms for all organizations, accounts, and API consumers.
+            Last updated: October 2026 • Governing terms for all organizations,
+            accounts, and API consumers.
           </p>
         </div>
 
@@ -46,7 +55,10 @@ export default function TermsOfServicePage() {
               <span>1. Acceptance & Authorized Usage</span>
             </h2>
             <p>
-              By accessing WorkSpace, creating an account, or registering an organization, you agree to be bound by these Terms of Service. You affirm that you are at least 18 years of age and authorized to bind your entity or organization to these terms.
+              By accessing WorkSpace, creating an account, or registering an
+              organization, you agree to be bound by these Terms of Service. You
+              affirm that you are at least 18 years of age and authorized to
+              bind your entity or organization to these terms.
             </p>
           </section>
 
@@ -56,7 +68,10 @@ export default function TermsOfServicePage() {
               <span>2. Security & Account Responsibilities</span>
             </h2>
             <p>
-              You are responsible for safeguarding your login credentials, API secrets, and two-factor authentication recovery codes. You must immediately notify WorkSpace of any suspected unauthorized access or compromise of your organization&apos;s workspace.
+              You are responsible for safeguarding your login credentials, API
+              secrets, and two-factor authentication recovery codes. You must
+              immediately notify WorkSpace of any suspected unauthorized access
+              or compromise of your organization&apos;s workspace.
             </p>
           </section>
 
@@ -67,10 +82,21 @@ export default function TermsOfServicePage() {
             </h2>
             <p>Users and automated API integrations agree NOT to:</p>
             <ul className="list-disc pl-5 space-y-1.5 text-slate-400">
-              <li>Attempt to bypass or reverse-engineer Row-Level Security (RLS) tenant isolation.</li>
-              <li>Execute automated denial-of-service attacks, port scans, or API rate limit abuses.</li>
-              <li>Upload malicious payloads, viruses, or unauthorized attachments.</li>
-              <li>Use webhooks or event streams to distribute spam or unauthorized telemetry.</li>
+              <li>
+                Attempt to bypass or reverse-engineer Row-Level Security (RLS)
+                tenant isolation.
+              </li>
+              <li>
+                Execute automated denial-of-service attacks, port scans, or API
+                rate limit abuses.
+              </li>
+              <li>
+                Upload malicious payloads, viruses, or unauthorized attachments.
+              </li>
+              <li>
+                Use webhooks or event streams to distribute spam or unauthorized
+                telemetry.
+              </li>
             </ul>
           </section>
 
@@ -80,7 +106,9 @@ export default function TermsOfServicePage() {
               <span>4. Service Availability & SLA</span>
             </h2>
             <p>
-              WorkSpace strives to maintain 99.9% uptime for core collaboration and API services. Scheduled maintenance windows will be communicated in advance via in-app notices or status advisories.
+              WorkSpace strives to maintain 99.9% uptime for core collaboration
+              and API services. Scheduled maintenance windows will be
+              communicated in advance via in-app notices or status advisories.
             </p>
           </section>
         </div>

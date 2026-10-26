@@ -72,7 +72,11 @@ export async function confirmEmailVerification(
   rawToken: string,
   context: EmailVerificationAuditContext = {},
 ): Promise<{ success: boolean; message: string }> {
-  if (!rawToken || typeof rawToken !== "string" || rawToken.trim().length === 0) {
+  if (
+    !rawToken ||
+    typeof rawToken !== "string" ||
+    rawToken.trim().length === 0
+  ) {
     throw new AppError(
       "Invalid or expired verification token",
       400,

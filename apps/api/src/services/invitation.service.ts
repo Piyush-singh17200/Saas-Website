@@ -1,5 +1,9 @@
 import { randomBytes, createHash } from "node:crypto";
-import { prisma } from "@workspace/database";
+import {
+  prisma,
+  withAdminBypassTransaction,
+  withTenantTransaction,
+} from "@workspace/database";
 import {
   type InvitationResponse,
   type CreateInvitationInput,
@@ -69,7 +73,7 @@ export class InvitationService {
   ): Promise<InvitationResponse> {
     const normalizedEmail = input.email.trim().toLowerCase();
 
-    return prisma.$transaction(async (tx) => {
+    return withTenantTransaction(organizationId, async (tx) => {
       // 1. Atomically enforce member seat entitlement limits
       await assertCanAddMember(organizationId, tx);
 
@@ -200,7 +204,7 @@ export class InvitationService {
     actorId: string,
     requestId?: string,
   ): Promise<{ message: string }> {
-    return prisma.$transaction(async (tx) => {
+    return withTenantTransaction(organizationId, async (tx) => {
       const invite = await tx.invitation.findFirst({
         where: {
           id: invitationId,
@@ -257,7 +261,7 @@ export class InvitationService {
     actorId: string,
     requestId?: string,
   ): Promise<InvitationResponse> {
-    return prisma.$transaction(async (tx) => {
+    return withTenantTransaction(organizationId, async (tx) => {
       const invite = await tx.invitation.findFirst({
         where: {
           id: invitationId,
@@ -377,17 +381,22 @@ export class InvitationService {
     const tokenHash = createHash("sha256")
       .update(rawToken.trim())
       .digest("hex");
-    const invite = await prisma.invitation.findUnique({
-      where: { tokenHash },
-      include: {
-        organization: {
-          select: { id: true, name: true, slug: true },
+    // Invitation tokens are bearer secrets and are intentionally resolved
+    // across tenants using the administrative bypass. The token hash is the
+    // only lookup key; no caller-supplied organization ID is trusted here.
+    const invite = await withAdminBypassTransaction((tx) =>
+      tx.invitation.findUnique({
+        where: { tokenHash },
+        include: {
+          organization: {
+            select: { id: true, name: true, slug: true },
+          },
+          inviter: {
+            select: { displayName: true },
+          },
         },
-        inviter: {
-          select: { displayName: true },
-        },
-      },
-    });
+      }),
+    );
 
     if (!invite) {
       throw new AppError("Invitation not found", 404, ErrorCode.NOT_FOUND);
@@ -452,7 +461,7 @@ export class InvitationService {
       .update(rawToken.trim())
       .digest("hex");
 
-    return prisma.$transaction(async (tx) => {
+    return withAdminBypassTransaction(async (tx) => {
       const invite = await tx.invitation.findUnique({
         where: { tokenHash },
         include: {

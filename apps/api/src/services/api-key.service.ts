@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { prisma } from "@workspace/database";
+import { prisma, withAdminBypassTransaction } from "@workspace/database";
 import {
   type CreateApiKeyInput,
   type CreateApiKeyResult,
@@ -160,57 +160,61 @@ export async function verifyApiKey(
     return null;
   }
 
-  // Lookup record by prefix
-  const record = await prisma.apiKey.findFirst({
-    where: {
-      keyPrefix,
-      revokedAt: null,
-    },
-  });
+  // Lookup is a trusted cross-tenant operation: the key prefix is a random
+  // identifier and the presented secret is verified below. This is one of the
+  // few paths that intentionally uses the administrative RLS bypass.
+  return withAdminBypassTransaction(async (tx) => {
+    const record = await tx.apiKey.findFirst({
+      where: {
+        keyPrefix,
+        revokedAt: null,
+      },
+    });
 
-  if (!record) {
-    return null;
-  }
+    if (!record) {
+      return null;
+    }
 
-  // Check expiration
-  if (record.expiresAt && record.expiresAt < new Date()) {
-    return null;
-  }
+    // Check expiration
+    if (record.expiresAt && record.expiresAt < new Date()) {
+      return null;
+    }
 
-  // Constant-time hash verification
-  const candidateHash = hashApiKey(rawKey);
-  const candidateBuffer = Buffer.from(candidateHash, "utf8");
-  const storedBuffer = Buffer.from(record.keyHash, "utf8");
+    // Constant-time hash verification
+    const candidateHash = hashApiKey(rawKey);
+    const candidateBuffer = Buffer.from(candidateHash, "utf8");
+    const storedBuffer = Buffer.from(record.keyHash, "utf8");
 
-  if (
-    candidateBuffer.length !== storedBuffer.length ||
-    !crypto.timingSafeEqual(candidateBuffer, storedBuffer)
-  ) {
-    return null;
-  }
+    if (
+      candidateBuffer.length !== storedBuffer.length ||
+      !crypto.timingSafeEqual(candidateBuffer, storedBuffer)
+    ) {
+      return null;
+    }
 
-  // Touch lastUsedAt asynchronously (best effort, do not block)
-  prisma.apiKey
-    .update({
-      where: { id: record.id },
-      data: { lastUsedAt: new Date() },
-    })
-    .catch((err) => {
+    // Touch lastUsedAt without allowing a bookkeeping failure to reject auth.
+    try {
+      await tx.apiKey.update({
+        where: { id: record.id },
+        data: { lastUsedAt: new Date() },
+      });
+    } catch (err) {
       logger.warn(
         "Failed to update API key lastUsedAt",
         { id: record.id },
         err,
       );
-    });
+    }
 
-  return {
-    id: record.id,
-    organizationId: record.organizationId,
-    createdById: record.createdById,
-    name: record.name,
-    keyPrefix: record.keyPrefix,
-    scopes: record.scopes,
-  };
+    return {
+      id: record.id,
+      organizationId: record.organizationId,
+      createdById: record.createdById,
+      name: record.name,
+      keyPrefix: record.keyPrefix,
+      scopes: record.scopes,
+    };
+  });
 }
 
 /**

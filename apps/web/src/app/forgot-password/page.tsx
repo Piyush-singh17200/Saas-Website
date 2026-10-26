@@ -2,7 +2,15 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Mail, ArrowRight, ArrowLeft, CheckCircle2, AlertCircle, Loader2, KeyRound } from "lucide-react";
+import {
+  Mail,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  KeyRound,
+} from "lucide-react";
 import { apiClient, ApiError } from "../../lib/api-client";
 
 export default function ForgotPasswordPage() {
@@ -44,9 +52,12 @@ export default function ForgotPasswordPage() {
           <div className="inline-flex p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-4">
             <KeyRound className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Reset your password</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            Reset your password
+          </h1>
           <p className="text-sm text-slate-400 mt-2">
-            Enter your email and we&apos;ll send you single-use instructions to reset your account password.
+            Enter your email and we&apos;ll send you single-use instructions to
+            reset your account password.
           </p>
         </div>
 
@@ -62,13 +73,16 @@ export default function ForgotPasswordPage() {
             <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-sm flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-400" />
               <div className="space-y-1">
-                <p className="font-semibold text-emerald-200">Request Dispatched</p>
+                <p className="font-semibold text-emerald-200">
+                  Request Dispatched
+                </p>
                 <p className="text-slate-300 leading-snug">{successMessage}</p>
               </div>
             </div>
 
             <p className="text-xs text-slate-500 text-center">
-              Didn&apos;t receive an email? Check your spam folder or wait a few minutes before submitting another request.
+              Didn&apos;t receive an email? Check your spam folder or wait a few
+              minutes before submitting another request.
             </p>
 
             <div className="pt-2">
@@ -84,7 +98,10 @@ export default function ForgotPasswordPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+              <label
+                htmlFor="email"
+                className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2"
+              >
                 Work Email Address
               </label>
               <div className="relative">

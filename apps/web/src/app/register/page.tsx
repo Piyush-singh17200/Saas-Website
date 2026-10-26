@@ -76,7 +76,10 @@ export default function RegisterPage() {
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none -z-10" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <Link href="/" className="flex items-center justify-center gap-3 group mb-2">
+        <Link
+          href="/"
+          className="flex items-center justify-center gap-3 group mb-2"
+        >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-[1px] shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
             <div className="w-full h-full bg-slate-950 rounded-[11px] flex items-center justify-center text-emerald-400 font-bold text-xl">
               W
@@ -90,7 +93,8 @@ export default function RegisterPage() {
           Create your account
         </h2>
         <p className="mt-1 text-center text-xs text-slate-400">
-          Start collaborating with guaranteed tenant isolation and real-time workspaces
+          Start collaborating with guaranteed tenant isolation and real-time
+          workspaces
         </p>
       </div>
 

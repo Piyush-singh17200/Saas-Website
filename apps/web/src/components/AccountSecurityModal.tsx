@@ -37,7 +37,9 @@ export function AccountSecurityModal({
   currentUser,
   onUserUpdated,
 }: AccountSecurityModalProps) {
-  const [activeTab, setActiveTab] = useState<"mfa" | "sessions" | "danger">("mfa");
+  const [activeTab, setActiveTab] = useState<"mfa" | "sessions" | "danger">(
+    "mfa",
+  );
   const [mfaEnabled, setMfaEnabled] = useState(
     currentUser?.mfaEnabled ?? false,
   );
@@ -218,7 +220,9 @@ export function AccountSecurityModal({
 
   async function handleDeleteAccount() {
     if (deleteConfirmationPhrase !== "DELETE MY ACCOUNT") {
-      setError("Please type 'DELETE MY ACCOUNT' in capital letters to confirm.");
+      setError(
+        "Please type 'DELETE MY ACCOUNT' in capital letters to confirm.",
+      );
       return;
     }
     if (!deletePassword) {
@@ -235,7 +239,9 @@ export function AccountSecurityModal({
       });
       window.location.href = "/login";
     } catch (err: any) {
-      setError(err.message || "Failed to delete account. Please verify your password.");
+      setError(
+        err.message || "Failed to delete account. Please verify your password.",
+      );
       setIsDeletingAccount(false);
     }
   }
@@ -265,7 +271,8 @@ export function AccountSecurityModal({
                 Account Security
               </h2>
               <p className="text-xs text-slate-400">
-                Manage your two-factor authentication, active login sessions, and account lifecycle
+                Manage your two-factor authentication, active login sessions,
+                and account lifecycle
               </p>
             </div>
           </div>
@@ -621,22 +628,32 @@ export function AccountSecurityModal({
                   <span>Permanent Account Deletion</span>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Deleting your account permanently removes your identity, profile, and all active sessions. Organizations where you are the sole owner will also be cleaned up.
+                  Deleting your account permanently removes your identity,
+                  profile, and all active sessions. Organizations where you are
+                  the sole owner will also be cleaned up.
                 </p>
                 <p className="text-xs text-rose-300 font-medium leading-relaxed">
-                  Notice: If you are the sole owner of an organization with other team members, you must first transfer ownership or remove other members before you can delete your account.
+                  Notice: If you are the sole owner of an organization with
+                  other team members, you must first transfer ownership or
+                  remove other members before you can delete your account.
                 </p>
               </div>
 
               <div className="space-y-4 p-4 rounded-xl border border-slate-800 bg-slate-950/40">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                    Type <span className="font-mono font-bold text-rose-400">DELETE MY ACCOUNT</span> to confirm:
+                    Type{" "}
+                    <span className="font-mono font-bold text-rose-400">
+                      DELETE MY ACCOUNT
+                    </span>{" "}
+                    to confirm:
                   </label>
                   <input
                     type="text"
                     value={deleteConfirmationPhrase}
-                    onChange={(e) => setDeleteConfirmationPhrase(e.target.value)}
+                    onChange={(e) =>
+                      setDeleteConfirmationPhrase(e.target.value)
+                    }
                     placeholder="DELETE MY ACCOUNT"
                     className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-700 font-mono text-sm text-white placeholder-slate-600 focus:outline-none focus:border-rose-500 transition-colors"
                   />
@@ -667,7 +684,11 @@ export function AccountSecurityModal({
                     className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-all shadow-lg shadow-rose-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Trash2 className="w-4 h-4" />
-                    <span>{isDeletingAccount ? "Deleting Account..." : "Permanently Delete My Account"}</span>
+                    <span>
+                      {isDeletingAccount
+                        ? "Deleting Account..."
+                        : "Permanently Delete My Account"}
+                    </span>
                   </button>
                 </div>
               </div>

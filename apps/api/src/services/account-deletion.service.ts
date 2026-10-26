@@ -1,4 +1,4 @@
-import { prisma } from "@workspace/database";
+import { prisma, withAdminBypassTransaction } from "@workspace/database";
 import { ErrorCode, MembershipRole } from "@workspace/contracts";
 import { verifyPassword } from "./password.service.js";
 import { revokeAllUserSessions } from "./session.service.js";
@@ -26,7 +26,14 @@ export interface AccountDeletionResult {
 export async function deleteUserAccount(
   params: AccountDeletionParams,
 ): Promise<AccountDeletionResult> {
-  const { userId, password, confirmationPhrase, ipAddress, userAgent, requestId } = params;
+  const {
+    userId,
+    password,
+    confirmationPhrase,
+    ipAddress,
+    userAgent,
+    requestId,
+  } = params;
 
   if (confirmationPhrase !== "DELETE MY ACCOUNT") {
     throw new AppError(
@@ -36,25 +43,27 @@ export async function deleteUserAccount(
     );
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      email: true,
-      passwordHash: true,
-      memberships: {
-        include: {
-          organization: {
-            include: {
-              memberships: {
-                select: { userId: true },
+  const user = await withAdminBypassTransaction(() =>
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        memberships: {
+          include: {
+            organization: {
+              include: {
+                memberships: {
+                  select: { userId: true },
+                },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+  );
 
   if (!user) {
     throw new AppError("User not found", 404, ErrorCode.NOT_FOUND);
@@ -102,7 +111,7 @@ export async function deleteUserAccount(
   }
 
   // 3. Execute cascading deletion in a safe transaction
-  await prisma.$transaction(async (tx) => {
+  await withAdminBypassTransaction(async (tx) => {
     // Delete solo organizations (cascades projects, tasks, comments, attachments)
     if (soloOrgIdsToDelete.length > 0) {
       await tx.organization.deleteMany({
@@ -170,7 +179,8 @@ export async function deleteUserAccount(
 
   return {
     success: true,
-    message: "Your account and associated solo data have been permanently deleted.",
+    message:
+      "Your account and associated solo data have been permanently deleted.",
     deletedOrganizationsCount: soloOrgIdsToDelete.length,
   };
 }

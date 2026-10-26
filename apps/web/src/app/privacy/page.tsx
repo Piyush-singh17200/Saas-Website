@@ -12,7 +12,9 @@ export default function PrivacyPolicyPage() {
             <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm group-hover:scale-105 transition-transform">
               W
             </div>
-            <span className="font-semibold text-white tracking-tight">WorkSpace</span>
+            <span className="font-semibold text-white tracking-tight">
+              WorkSpace
+            </span>
           </Link>
           <Link
             href="/"
@@ -35,7 +37,8 @@ export default function PrivacyPolicyPage() {
             Privacy Policy
           </h1>
           <p className="text-sm text-slate-400">
-            Last updated: October 2026 • Effective immediately for all WorkSpace tenants and users.
+            Last updated: October 2026 • Effective immediately for all WorkSpace
+            tenants and users.
           </p>
         </div>
 
@@ -46,7 +49,12 @@ export default function PrivacyPolicyPage() {
               <span>1. Tenant Isolation & Data Boundary</span>
             </h2>
             <p>
-              WorkSpace is engineered with strict cryptographic and database isolation. Every organization&apos;s data is governed by PostgreSQL Row-Level Security (RLS) policies. Your tasks, attachments, projects, API keys, and audit trails cannot be queried or accessed by users outside your verified organization boundary.
+              WorkSpace is engineered with strict cryptographic and database
+              isolation. Every organization&apos;s data is governed by
+              PostgreSQL Row-Level Security (RLS) policies. Your tasks,
+              attachments, projects, API keys, and audit trails cannot be
+              queried or accessed by users outside your verified organization
+              boundary.
             </p>
           </section>
 
@@ -55,11 +63,28 @@ export default function PrivacyPolicyPage() {
               <Eye className="w-4 h-4 text-emerald-400" />
               <span>2. Information We Collect</span>
             </h2>
-            <p>We collect only the minimum required information to provide secure service:</p>
+            <p>
+              We collect only the minimum required information to provide secure
+              service:
+            </p>
             <ul className="list-disc pl-5 space-y-1.5 text-slate-400">
-              <li><strong className="text-slate-200">Account Credentials:</strong> Email address, cryptographically hashed passwords (Argon2id/bcrypt), and Multi-Factor Authentication keys.</li>
-              <li><strong className="text-slate-200">Security & Session Metadata:</strong> IP address, user-agent headers, and authentication timestamps for session tracking and threat prevention.</li>
-              <li><strong className="text-slate-200">Workspace Content:</strong> Projects, tasks, comments, and uploaded attachments you create within your organization.</li>
+              <li>
+                <strong className="text-slate-200">Account Credentials:</strong>{" "}
+                Email address, cryptographically hashed passwords
+                (Argon2id/bcrypt), and Multi-Factor Authentication keys.
+              </li>
+              <li>
+                <strong className="text-slate-200">
+                  Security & Session Metadata:
+                </strong>{" "}
+                IP address, user-agent headers, and authentication timestamps
+                for session tracking and threat prevention.
+              </li>
+              <li>
+                <strong className="text-slate-200">Workspace Content:</strong>{" "}
+                Projects, tasks, comments, and uploaded attachments you create
+                within your organization.
+              </li>
             </ul>
           </section>
 
@@ -69,7 +94,11 @@ export default function PrivacyPolicyPage() {
               <span>3. How We Secure Your Data</span>
             </h2>
             <p>
-              All traffic between your client and our services is secured via TLS 1.3 encryption. Passwords and recovery keys are never stored in plaintext. Sensitive session tokens are dispatched over HTTP-only, SameSite strict cookies. API keys are hashed with SHA-256 before storage in the database.
+              All traffic between your client and our services is secured via
+              TLS 1.3 encryption. Passwords and recovery keys are never stored
+              in plaintext. Sensitive session tokens are dispatched over
+              HTTP-only, SameSite strict cookies. API keys are hashed with
+              SHA-256 before storage in the database.
             </p>
           </section>
 
@@ -79,7 +108,10 @@ export default function PrivacyPolicyPage() {
               <span>4. Right to Deletion & Account Erasure</span>
             </h2>
             <p>
-              In accordance with GDPR, CCPA, and global privacy standards, you have the right to completely and permanently delete your account at any time through the Account Security modal. Deletion cascades through all personal records and active sessions immediately.
+              In accordance with GDPR, CCPA, and global privacy standards, you
+              have the right to completely and permanently delete your account
+              at any time through the Account Security modal. Deletion cascades
+              through all personal records and active sessions immediately.
             </p>
           </section>
 
@@ -89,7 +121,12 @@ export default function PrivacyPolicyPage() {
               <span>5. Contact Our Data Protection Office</span>
             </h2>
             <p>
-              For privacy inquiries, audit disclosures, or data portability requests, contact our security team at <span className="text-emerald-400 font-mono text-xs">privacy@workspace.internal</span>.
+              For privacy inquiries, audit disclosures, or data portability
+              requests, contact our security team at{" "}
+              <span className="text-emerald-400 font-mono text-xs">
+                privacy@workspace.internal
+              </span>
+              .
             </p>
           </section>
         </div>

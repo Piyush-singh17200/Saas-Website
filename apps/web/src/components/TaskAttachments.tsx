@@ -268,11 +268,17 @@ export function TaskAttachments({
                 className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 hover:border-slate-700/80 transition-colors flex items-center justify-between gap-3 group"
               >
                 <figure className="flex items-center gap-2.5 min-w-0 m-0">
-                  <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0" aria-label={`Icon for ${att.fileName}`}>
+                  <div
+                    className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0"
+                    aria-label={`Icon for ${att.fileName}`}
+                  >
                     {getFileIcon(att.mimeType)}
                   </div>
                   <figcaption className="min-w-0">
-                    <p className="text-xs font-medium text-slate-200 truncate group-hover:text-white transition-colors" title={att.fileName}>
+                    <p
+                      className="text-xs font-medium text-slate-200 truncate group-hover:text-white transition-colors"
+                      title={att.fileName}
+                    >
                       {att.fileName}
                     </p>
                     <p className="text-[11px] text-slate-500">

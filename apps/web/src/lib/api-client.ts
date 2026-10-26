@@ -240,7 +240,11 @@ export class ApiClient {
   public async deleteAccount(data: {
     password: string;
     confirmationPhrase: string;
-  }): Promise<{ success: boolean; message: string; deletedOrganizationsCount: number }> {
+  }): Promise<{
+    success: boolean;
+    message: string;
+    deletedOrganizationsCount: number;
+  }> {
     return this.request("/api/v1/auth/account", {
       method: "DELETE",
       body: JSON.stringify(data),

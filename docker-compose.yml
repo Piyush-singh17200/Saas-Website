@@ -7,12 +7,20 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-workspace_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-workspace_pass}
       POSTGRES_DB: ${POSTGRES_DB:-workspace_dev}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-workspace_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-workspace_app_pass}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+      - ./scripts/provision-app-role.sql:/opt/workspace/provision-app-role.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-workspace_user} -d ${POSTGRES_DB:-workspace_dev}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-workspace_user} -d ${POSTGRES_DB:-workspace_dev}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5

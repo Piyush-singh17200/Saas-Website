@@ -33,7 +33,8 @@ export default function GlobalError({
             Something unexpected occurred
           </h1>
           <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
-            Our security and stability sandbox caught an unhandled exception. Your session and tenant data remain safe.
+            Our security and stability sandbox caught an unhandled exception.
+            Your session and tenant data remain safe.
           </p>
         </div>
 

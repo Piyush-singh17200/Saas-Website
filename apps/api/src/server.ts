@@ -1,22 +1,37 @@
+import "dotenv/config";
 import type { Server } from "node:http";
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
-import { prisma } from "@workspace/database";
+import { assertRlsRuntimeRole, prisma } from "@workspace/database";
 import { closeRedis } from "./lib/redis.js";
 import { queueManager } from "./queues/queue.service.js";
 import { logger } from "./lib/logger.js";
 
 const app = createApp();
 
-const server: Server = app.listen(env.PORT, () => {
-  logger.info(
-    `WorkSpace API server running in ${env.NODE_ENV} mode on port ${env.PORT}`,
-    {
-      port: env.PORT,
-      environment: env.NODE_ENV,
-    },
-  );
-});
+let server: Server | undefined;
+
+async function startServer(): Promise<void> {
+  try {
+    await assertRlsRuntimeRole();
+  } catch (err) {
+    logger.error("Database security posture validation failed", {}, err);
+    await prisma.$disconnect().catch(() => undefined);
+    process.exit(1);
+  }
+
+  server = app.listen(env.PORT, () => {
+    logger.info(
+      `WorkSpace API server running in ${env.NODE_ENV} mode on port ${env.PORT}`,
+      {
+        port: env.PORT,
+        environment: env.NODE_ENV,
+      },
+    );
+  });
+}
+
+void startServer();
 
 let isShuttingDown = false;
 
@@ -25,6 +40,10 @@ async function handleShutdown(signal: string): Promise<void> {
   isShuttingDown = true;
 
   logger.info(`Received ${signal}. Initiating graceful shutdown...`);
+
+  if (!server) {
+    process.exit(0);
+  }
 
   // Stop accepting new connections
   server.close(async (err) => {

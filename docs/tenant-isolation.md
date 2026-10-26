@@ -24,6 +24,10 @@ By default, the table owner and PostgreSQL superusers bypass RLS. Therefore, the
 - Configured with `NOBYPASSRLS` and `NOSUPERUSER`.
 - Granted explicit `SELECT`, `INSERT`, `UPDATE`, `DELETE` privileges on public tables and sequences.
 - Table policies are enforced using `FORCE ROW LEVEL SECURITY` to prevent any table-level bypass.
+- Provisioned by `scripts/provision-app-role.sql`. The script is idempotent and safe to run both before migrations (role creation) and after migrations (grants for the `app` schema and public tables).
+- The Compose stack runs a one-shot `migrate` service with the owner connection, then a `provision-app-role` service with the owner connection, before starting the API or worker.
+
+The API and worker use separate credentials from migrations. Production startup calls `assertRlsRuntimeRole()` before opening HTTP listeners or registering BullMQ consumers; it exits when the runtime connection is a superuser or has `BYPASSRLS`.
 
 ### 2.2 Transaction-Local Setting (`set_config(..., true)`)
 
@@ -120,28 +124,39 @@ $$ LANGUAGE plpgsql STABLE;
 
 ---
 
-## 3. Transaction Helper (`withTenantTransaction`)
+## 3. Transaction Helpers
 
-The `@workspace/database` package provides the transactional execution helper:
+The `@workspace/database` package exports a context-aware `prisma` proxy plus scoped transaction helpers. Application code should use the proxy; while a helper is active, every query is routed to the associated transaction automatically:
 
 ```typescript
-import { withTenantTransaction } from "@workspace/database";
+import { prisma, withTenantTransaction } from "@workspace/database";
 
-await withTenantTransaction(organizationId, async (tx) => {
-  // All queries executed on tx are restricted strictly to organizationId
-  const projects = await tx.project.findMany();
-  const tasks = await tx.task.findMany();
+await withTenantTransaction(organizationId, async () => {
+  // Routed through the tenant transaction, constrained by RLS.
+  const projects = await prisma.project.findMany();
+  const tasks = await prisma.task.findMany();
   return { projects, tasks };
 });
 ```
 
-For administrative platform operations (such as global database migrations or tenant provisioning), `withAdminBypassTransaction` explicitly activates `app.admin_bypass = 'true'`.
+- **`withTenantTransaction`**: Sets `app.current_organization_id` for request/job-scoped tenant work. Re-entrant calls for the same organization reuse the surrounding transaction; changing tenants inside a nested context throws.
+- **`withUserTransaction`**: Sets `app.current_user_id` for legitimate account-level operations such as listing the current user's organizations or writing personal security audit events.
+- **`withDetachedTenantTransaction`**: Always opens a fresh tenant transaction, even when another context is active. Used for fire-and-forget webhook fan-out so it cannot race the request transaction's commit.
+- **`withAdminBypassTransaction`**: Narrowly scoped trusted cross-tenant operations only: API-key lookup, invitation token resolution/acceptance, account deletion, Stripe webhook processing, and maintenance sweeps. It sets `app.admin_bypass = 'true'` in a dedicated transaction.
+
+Request-scoped API transactions are opened by `requireActiveMembership` / developer authentication and remain open until the response finishes. This ensures downstream services cannot accidentally query outside the tenant scope.
 
 ---
 
 ## 4. Invariants & Adversarial Verification
 
-The integration test suite (`tenant-isolation.test.ts`) verifies the following behaviors against a live PostgreSQL 18 database using `workspace_app`:
+Two live-database suites verify RLS:
+
+- `tenant-isolation.test.ts` connects directly as both owner and `workspace_app` to test missing context, cross-tenant reads, mutations, invitation/membership isolation, connection-pool safety, and atomic rollback.
+- `rls-runtime.test.ts` runs the actual Express API with `DATABASE_URL` pointing at `workspace_app`. It registers users through public endpoints, creates organizations and projects, verifies organization listings are account-scoped, verifies cross-tenant project reads return non-disclosing 404s, and verifies direct context-free queries return zero rows. It also proves startup accepts the app role.
+- `rls-startup-fail-closed.test.ts` proves `assertRlsRuntimeRole()` rejects the owner/superuser connection.
+
+The integration suite verifies the following behaviors against a live PostgreSQL 18 database using `workspace_app`:
 
 1. **Missing Tenant Context**: Queries executed without setting `app.current_organization_id` return **0 rows**, completely blocking data discovery.
 2. **Cross-Tenant ID Access**: Attempting to query `organization.findUnique({ where: { id: tenantBId } })`, `project.findMany()`, or `task.findMany()` while in Tenant A's context returns **0 records**.
@@ -149,3 +164,4 @@ The integration test suite (`tenant-isolation.test.ts`) verifies the following b
 4. **Cross-Tenant Membership & Invitation Isolation**: Invitations and memberships from other organizations cannot be read or altered.
 5. **Connection Pooling Safety**: Context set within a transaction is purged automatically on transaction completion.
 6. **Atomic Rollback**: Catastrophic failures during organization provisioning or task updates trigger a clean database rollback leaving no orphaned records or stale activity logs.
+7. **Runtime API Isolation**: Cross-tenant HTTP requests receive 404 and no context-free query can see tenant rows; startup fails closed on a bypassing role.

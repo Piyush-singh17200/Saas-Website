@@ -7,6 +7,7 @@ import { createApp } from "../app.js";
 import { PrismaClient } from "@workspace/database";
 import { createSession } from "../services/session.service.js";
 import { env } from "../config/env.js";
+import { testDatabaseUrl } from "./test-env.js";
 import { LocalStorageAdapter } from "../lib/storage/local-adapter.js";
 import { S3StorageAdapter } from "../lib/storage/s3-adapter.js";
 import {
@@ -23,7 +24,7 @@ describe("Phase 7: Secure File Uploads and Object Storage", () => {
   const db = new PrismaClient({
     datasources: {
       db: {
-        url: "postgresql://workspace_user:workspace_pass@127.0.0.1:5433/workspace_test?schema=public",
+        url: testDatabaseUrl,
       },
     },
   });

@@ -20,6 +20,17 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
+  // E2E specs mock the API at the browser level, so only the Next.js server is
+  // required. CI builds the app before this runs; locally run `pnpm build` once
+  // or start `next dev` manually and set PLAYWRIGHT_BASE_URL accordingly.
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: "pnpm --filter @workspace/web start",
+        url: "http://localhost:3000",
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
   projects: [
     {
       name: "chromium",

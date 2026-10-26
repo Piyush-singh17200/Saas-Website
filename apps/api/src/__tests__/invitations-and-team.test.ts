@@ -6,13 +6,14 @@ import { createApp } from "../app.js";
 import { randomUUID } from "node:crypto";
 import { createSession } from "../services/session.service.js";
 import { env } from "../config/env.js";
+import { testDatabaseUrl } from "./test-env.js";
 
 describe("Phase 6: Team Management, Invitations, Notifications & Project Lifecycle", () => {
   const app = createApp();
   const db = new PrismaClient({
     datasources: {
       db: {
-        url: "postgresql://workspace_user:workspace_pass@127.0.0.1:5433/workspace_test?schema=public",
+        url: testDatabaseUrl,
       },
     },
   });

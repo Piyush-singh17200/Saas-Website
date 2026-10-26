@@ -31,12 +31,15 @@ services:
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.web
+      args:
+        # Public env vars are embedded in the Next.js client bundle at build time.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost}
     container_name: workspace-prod-web
     restart: unless-stopped
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost}
     depends_on:
       api:
         condition: service_healthy
@@ -55,9 +58,12 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-workspace_user}:${POSTGRES_PASSWORD:-workspace_pass}@postgres:5432/${POSTGRES_DB:-workspace_prod}?schema=public
+      # Runtime database role: NOSUPERUSER, NOBYPASSRLS, subject to FORCE RLS.
+      - DATABASE_URL=postgresql://${POSTGRES_APP_USER:-workspace_app}:${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-workspace_prod}?schema=public&connection_limit=20
+      - ENFORCE_RLS_RUNTIME=true
       - REDIS_URL=redis://redis:6379
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - APP_URL=${APP_URL:-http://localhost}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
       - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-workspace_session}
       - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-7}
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
@@ -71,9 +77,12 @@ services:
       - STORAGE_S3_SECRET_ACCESS_KEY=${STORAGE_S3_SECRET_ACCESS_KEY}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRO_PRICE_ID=${STRIPE_PRO_PRICE_ID:-price_pro_placeholder}
     volumes:
       - uploads_data:/app/uploads
     depends_on:
+      provision-app-role:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -93,7 +102,9 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-workspace_user}:${POSTGRES_PASSWORD:-workspace_pass}@postgres:5432/${POSTGRES_DB:-workspace_prod}?schema=public
+      # Same unprivileged runtime role as the API; worker jobs must not escape RLS.
+      - DATABASE_URL=postgresql://${POSTGRES_APP_USER:-workspace_app}:${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-workspace_prod}?schema=public&connection_limit=10
+      - ENFORCE_RLS_RUNTIME=true
       - REDIS_URL=redis://redis:6379
       - MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY}
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
@@ -102,12 +113,16 @@ services:
     volumes:
       - uploads_data:/app/uploads
     depends_on:
+      provision-app-role:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - internal_network
+      # Outbound-only egress for webhook/email delivery. No published ports.
+      - egress_network
 
   # ----------------------------------------------------------------------------
   # 5. PostgreSQL Database (Internal only - not published to host)
@@ -120,10 +135,20 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-workspace_user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-workspace_pass}
       - POSTGRES_DB=${POSTGRES_DB:-workspace_prod}
+      - POSTGRES_APP_USER=${POSTGRES_APP_USER:-workspace_app}
+      - POSTGRES_APP_PASSWORD=${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD must be set}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+      - ./scripts/provision-app-role.sql:/opt/workspace/provision-app-role.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-workspace_user} -d ${POSTGRES_DB:-workspace_prod}"]
+      # Force TCP so readiness is only reported after first-init scripts finish
+      # and the final PostgreSQL server is accepting remote connections.
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-workspace_user} -d ${POSTGRES_DB:-workspace_prod}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -131,13 +156,74 @@ services:
       - internal_network
 
   # ----------------------------------------------------------------------------
-  # 6. Redis Queue & Rate Limit Store (Internal only - not published to host)
+  # 6. One-shot Database Migration (privileged owner connection)
+  # Runtime API/worker credentials never have schema modification privileges.
+  # ----------------------------------------------------------------------------
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+      target: migrator
+    container_name: workspace-prod-migrate
+    restart: "no"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-workspace_user}:${POSTGRES_PASSWORD:-workspace_pass}@postgres:5432/${POSTGRES_DB:-workspace_prod}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal_network
+
+  # ----------------------------------------------------------------------------
+  # 7. Runtime Role Grants (idempotent; runs after migrations create app schema)
+  # ----------------------------------------------------------------------------
+  provision-app-role:
+    image: postgres:16-alpine
+    container_name: workspace-prod-provision
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        psql -v ON_ERROR_STOP=1 \
+          --host postgres \
+          --username "$$POSTGRES_USER" \
+          --dbname "$$POSTGRES_DB" \
+          -v app_user="$$POSTGRES_APP_USER" \
+          -v app_password="$$POSTGRES_APP_PASSWORD" \
+          -v db_name="$$POSTGRES_DB" \
+          -f /opt/workspace/provision-app-role.sql
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-workspace_pass}
+      POSTGRES_USER: ${POSTGRES_USER:-workspace_user}
+      POSTGRES_DB: ${POSTGRES_DB:-workspace_prod}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-workspace_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD must be set}
+    volumes:
+      - ./scripts/provision-app-role.sql:/opt/workspace/provision-app-role.sql:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal_network
+
+  # ----------------------------------------------------------------------------
+  # 8. Redis Queue & Rate Limit Store (Internal only - not published to host)
   # ----------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: workspace-prod-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--maxmemory",
+        "512mb",
+        "--maxmemory-policy",
+        "noeviction",
+      ]
     volumes:
       - redis_data:/data
     healthcheck:
@@ -165,3 +251,5 @@ networks:
   internal_network:
     driver: bridge
     internal: true # Security: isolated network with no outbound internet access
+  egress_network:
+    driver: bridge # Dedicated outbound route for worker webhooks and email

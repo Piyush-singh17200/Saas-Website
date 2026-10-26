@@ -4,12 +4,13 @@ import { randomUUID } from "node:crypto";
 import { processInvitationExpiryJob } from "../processors/invitation-expiry.processor.js";
 import { processCleanupJob } from "../processors/cleanup.processor.js";
 import { processBillingReconciliationJob } from "../processors/billing-reconciliation.processor.js";
+import { testDatabaseUrl } from "./test-env.js";
 
 describe("Maintenance, Cleanup & Billing Processors", () => {
   const db = new PrismaClient({
     datasources: {
       db: {
-        url: "postgresql://workspace_user:workspace_pass@127.0.0.1:5433/workspace_test?schema=public",
+        url: testDatabaseUrl,
       },
     },
   });

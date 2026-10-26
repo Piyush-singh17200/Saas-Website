@@ -21,7 +21,8 @@ export default function NotFound() {
             Lost in the workspace?
           </h1>
           <p className="text-sm text-slate-400 leading-relaxed max-w-sm mx-auto">
-            The resource, project, or page you were looking for doesn&apos;t exist or has been moved to another location.
+            The resource, project, or page you were looking for doesn&apos;t
+            exist or has been moved to another location.
           </p>
         </div>
 

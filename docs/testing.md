@@ -8,7 +8,15 @@ WorkSpace features automated tests across units, integration suites, concurrency
 
 ### Run all tests across the monorepo
 
+Tests require a PostgreSQL database with all migrations applied. API/worker
+tests use `TEST_DATABASE_URL` (owner/migration role); the RLS runtime suites
+also use `TEST_APP_DATABASE_URL` (unprivileged `workspace_app` role).
+
 ```bash
+# One-time database preparation (owner URL)
+DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter @workspace/database exec prisma migrate deploy
+
+# Run all tests
 pnpm test
 ```
 
@@ -49,11 +57,33 @@ pnpm --filter @workspace/api exec vitest run src/__tests__/auth.test.ts
 
 ### Real PostgreSQL Integration (`workspace_test`)
 
-Tests run against a real local PostgreSQL database (`postgresql://workspace_user:workspace_pass@localhost:5433/workspace_test`) using:
+Tests run against a real PostgreSQL database selected by environment variables:
 
-- **`workspace_app`**: An unprivileged PostgreSQL role with `NOBYPASSRLS` and `NOSUPERUSER`.
+- **`TEST_DATABASE_URL`**: Owner/migration role used for fixtures and cleanup.
+- **`TEST_APP_DATABASE_URL`**: Unprivileged `workspace_app` role with `NOBYPASSRLS` and `NOSUPERUSER`.
 - **`set_config('app.current_organization_id', orgId, true)`**: Ensures real SQL row-filtering matches production behavior.
 - Tests do NOT rely solely on mocks for security assertions.
+
+Local defaults target `127.0.0.1:5433/workspace_test`; CI sets both variables to
+the service container on port 5432 and provisions the app role before applying
+migrations.
+
+### RLS Runtime Tests
+
+- `rls-runtime.test.ts` starts the real Express app with `DATABASE_URL` pointing
+  at `workspace_app`, then registers users and creates organizations/projects
+  through public endpoints. It verifies cross-tenant reads return 404, account
+  listings stay scoped, context-free queries see zero rows, and the startup
+  assertion accepts the app role.
+- `rls-startup-fail-closed.test.ts` verifies startup rejects the owner/superuser
+  role when `ENFORCE_RLS_RUNTIME=true`.
+
+### End-to-End Browser Tests
+
+Playwright starts the built Next.js server automatically through `webServer`
+when `PLAYWRIGHT_BASE_URL` is not set. The specs mock API responses in the
+browser, so no live API process or seeded tenant data is required. CI builds the
+web app before running `test:e2e`.
 
 ### Optimistic Concurrency Control (OCC) Tests
 

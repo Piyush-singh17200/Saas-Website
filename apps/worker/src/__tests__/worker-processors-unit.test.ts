@@ -3,7 +3,7 @@ import { UnrecoverableError, type Job } from "bullmq";
 import { processWebhookDeliveryJob } from "../processors/webhook.processor.js";
 import { processNotificationJob } from "../processors/notification.processor.js";
 import { processInvitationExpiryJob } from "../processors/invitation-expiry.processor.js";
-import { prisma } from "@workspace/database";
+import { prisma, withTenantTransaction } from "@workspace/database";
 import * as ssrfModule from "../lib/ssrf.js";
 
 // Mock database methods
@@ -179,6 +179,75 @@ describe("Worker Processors Unit Tests", () => {
         expect.objectContaining({
           where: { id: "11111111-1111-1111-1111-111111111111" },
           data: { consecutiveFailures: 0 },
+        }),
+      );
+    });
+
+    it("commits failure health before throwing a retry error", async () => {
+      let callbackErrored = false;
+      vi.mocked(withTenantTransaction).mockImplementationOnce(
+        async (_orgId, callback) => {
+          try {
+            return await callback(prisma as any);
+          } catch (err) {
+            callbackErrored = true;
+            throw err;
+          }
+        },
+      );
+
+      vi.mocked(prisma.webhookSubscription.findUnique).mockResolvedValueOnce({
+        id: "11111111-1111-1111-1111-111111111111",
+        url: "https://example.com/webhook",
+        secret: "whsec_test_secret_abc123",
+        isActive: true,
+        consecutiveFailures: 3,
+        organizationId: "44444444-4444-4444-4444-444444444444",
+      } as any);
+
+      vi.spyOn(ssrfModule, "sendSafeWebhookRequest").mockResolvedValueOnce({
+        success: false,
+        statusCode: 503,
+        durationMs: 20,
+        errorMessage: "upstream unavailable",
+      });
+
+      const mockJob = {
+        id: "job-webhook-failure",
+        data: {
+          subscriptionId: "11111111-1111-1111-1111-111111111111",
+          deliveryId: "22222222-2222-2222-2222-222222222222",
+          organizationId: "44444444-4444-4444-4444-444444444444",
+          event: {
+            id: "33333333-3333-3333-3333-333333333333",
+            type: "task.created",
+            timestamp: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            organizationId: "44444444-4444-4444-4444-444444444444",
+            resourceId: "55555555-5555-5555-5555-555555555555",
+            payload: { title: "Test Task" },
+          },
+          attempt: 1,
+        },
+      } as unknown as Job<any>;
+
+      await expect(processWebhookDeliveryJob(mockJob)).rejects.toThrow(
+        "Webhook dispatch failed: upstream unavailable",
+      );
+
+      // The callback must return normally so Prisma commits the failure state;
+      // the retry error is raised after the transaction closes.
+      expect(callbackErrored).toBe(false);
+      expect(prisma.webhookDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "22222222-2222-2222-2222-222222222222" },
+          data: expect.objectContaining({ status: "FAILED" }),
+        }),
+      );
+      expect(prisma.webhookSubscription.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "11111111-1111-1111-1111-111111111111" },
+          data: { consecutiveFailures: 4, isActive: true },
         }),
       );
     });

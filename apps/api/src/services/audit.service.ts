@@ -1,4 +1,11 @@
-import { prisma, type Prisma } from "@workspace/database";
+import {
+  prisma,
+  getDatabaseContext,
+  withAdminBypassTransaction,
+  withTenantTransaction,
+  withUserTransaction,
+  type Prisma,
+} from "@workspace/database";
 import type { AuditLogListQuery } from "@workspace/contracts";
 
 export interface AuditLogParams {
@@ -103,12 +110,13 @@ export function sanitizeMetadata(
  * Records an audit log entry with automatic sanitization of sensitive values.
  */
 export async function recordAuditLog(params: AuditLogParams): Promise<void> {
-  const db = params.tx ?? prisma;
   const safeMeta = params.metadata
     ? (sanitizeMetadata(params.metadata) as unknown as Prisma.InputJsonValue)
     : undefined;
 
-  try {
+  const write = async (
+    db: Prisma.TransactionClient | typeof prisma,
+  ): Promise<void> => {
     await db.auditLog.create({
       data: {
         organizationId: params.organizationId ?? undefined,
@@ -125,6 +133,34 @@ export async function recordAuditLog(params: AuditLogParams): Promise<void> {
         metadata: safeMeta,
       },
     });
+  };
+
+  try {
+    if (params.tx) {
+      await write(params.tx);
+      return;
+    }
+
+    if (getDatabaseContext()) {
+      await write(prisma);
+      return;
+    }
+
+    if (params.organizationId) {
+      await withTenantTransaction(params.organizationId, write);
+      return;
+    }
+
+    if (params.actorId) {
+      // Account-level audit event: visible only to its actor through the
+      // app.current_user_id RLS policy.
+      await withUserTransaction(params.actorId, write);
+      return;
+    }
+
+    // Anonymous events (for example a failed login for an unknown email) have
+    // no tenant or user scope.
+    await withAdminBypassTransaction(write);
   } catch (err) {
     console.error("[AuditLog] Failed to record audit log:", err);
   }

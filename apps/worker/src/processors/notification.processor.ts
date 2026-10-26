@@ -47,33 +47,33 @@ export async function processNotificationJob(
     return { status: "skipped", reason: "recipient_ineligible" };
   }
 
-  // 3. Strict Tenant Isolation Verification
-  // For non-invitation notifications, verify that recipient is an active member of this organization
-  if (payload.type !== "ORG_INVITATION") {
-    const membership = await prisma.membership.findFirst({
-      where: {
-        organizationId: payload.organizationId,
-        userId: payload.recipientUserId,
-        status: "ACTIVE",
-      },
-    });
-
-    if (!membership) {
-      logger.warn(
-        "Permanent failure: Recipient is not a member of target organization",
-        {
-          jobId: job.id,
-          organizationId: payload.organizationId,
-          recipientUserId: payload.recipientUserId,
-        },
-      );
-      // Do not deliver private tenant data to non-members
-      return { status: "rejected", reason: "recipient_not_member" };
-    }
-  }
-
-  // 4. Scoped transaction under PostgreSQL RLS context
+  // 3. Scoped transaction under PostgreSQL RLS context
   return withTenantTransaction(payload.organizationId, async (tx) => {
+    // Strict Tenant Isolation Verification: for non-invitation notifications,
+    // verify the recipient is an active member of this organization.
+    if (payload.type !== "ORG_INVITATION") {
+      const membership = await (tx as any).membership.findFirst({
+        where: {
+          organizationId: payload.organizationId,
+          userId: payload.recipientUserId,
+          status: "ACTIVE",
+        },
+      });
+
+      if (!membership) {
+        logger.warn(
+          "Permanent failure: Recipient is not a member of target organization",
+          {
+            jobId: job.id,
+            organizationId: payload.organizationId,
+            recipientUserId: payload.recipientUserId,
+          },
+        );
+        // Do not deliver private tenant data to non-members
+        return { status: "rejected", reason: "recipient_not_member" };
+      }
+    }
+
     // Check domain-level idempotency
     const existing = await (tx as any).notification.findFirst({
       where: {

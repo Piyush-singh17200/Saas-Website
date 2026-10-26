@@ -482,7 +482,8 @@ authRouter.delete(
       const parsed = DeleteAccountInputSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError(
-          parsed.error.issues[0]?.message || "Invalid account deletion confirmation",
+          parsed.error.issues[0]?.message ||
+            "Invalid account deletion confirmation",
           400,
           ErrorCode.VALIDATION_ERROR,
         );

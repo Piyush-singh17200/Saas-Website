@@ -17,7 +17,9 @@ import { apiClient, ApiError } from "../../lib/api-client";
 
 export default function OrganizationsPage() {
   const router = useRouter();
-  const [organizations, setOrganizations] = useState<OrganizationResponse[]>([]);
+  const [organizations, setOrganizations] = useState<OrganizationResponse[]>(
+    [],
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +41,9 @@ export default function OrganizationsPage() {
         router.push("/login");
         return;
       }
-      setError("Failed to load organizations. Please ensure you are logged in.");
+      setError(
+        "Failed to load organizations. Please ensure you are logged in.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -55,7 +59,7 @@ export default function OrganizationsPage() {
       val
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
+        .replace(/^-|-$/g, ""),
     );
   };
 
@@ -140,7 +144,8 @@ export default function OrganizationsPage() {
             Your Organizations
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Select a tenant workspace or create a new organization with isolated Row-Level Security.
+            Select a tenant workspace or create a new organization with isolated
+            Row-Level Security.
           </p>
         </div>
 
@@ -169,9 +174,12 @@ export default function OrganizationsPage() {
             <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4">
               <Building2 className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-semibold text-white">No organizations found</h3>
+            <h3 className="text-lg font-semibold text-white">
+              No organizations found
+            </h3>
             <p className="text-xs text-slate-400 mt-1 mb-6">
-              Create your first organization to set up isolated projects, invite your team, and configure billing.
+              Create your first organization to set up isolated projects, invite
+              your team, and configure billing.
             </p>
             <button
               onClick={() => setIsModalOpen(true)}
@@ -237,7 +245,8 @@ export default function OrganizationsPage() {
               Create New Organization
             </h2>
             <p className="text-xs text-slate-400 mb-5">
-              Set up a new isolated organization workspace with dedicated team access.
+              Set up a new isolated organization workspace with dedicated team
+              access.
             </p>
 
             {modalError && (

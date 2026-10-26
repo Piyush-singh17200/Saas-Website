@@ -1,7 +1,7 @@
-import dotenv from "dotenv";
+import "dotenv/config";
 import { Worker, type Job } from "bullmq";
 import { QueueName } from "@workspace/contracts";
-import { prisma } from "@workspace/database";
+import { assertRlsRuntimeRole, prisma } from "@workspace/database";
 import { getWorkerRedisClient, closeWorkerRedis } from "./lib/redis.js";
 import { logger } from "./lib/logger.js";
 import { processNotificationJob } from "./processors/notification.processor.js";
@@ -9,8 +9,6 @@ import { processInvitationExpiryJob } from "./processors/invitation-expiry.proce
 import { processBillingReconciliationJob } from "./processors/billing-reconciliation.processor.js";
 import { processCleanupJob } from "./processors/cleanup.processor.js";
 import { processWebhookDeliveryJob } from "./processors/webhook.processor.js";
-
-dotenv.config();
 
 logger.info("Initializing WorkSpace Background Worker process...");
 
@@ -75,43 +73,6 @@ function registerWorker<T>(
   return worker;
 }
 
-// Instantiate queue workers
-export const notificationWorker = registerWorker(
-  QueueName.NOTIFICATIONS,
-  processNotificationJob,
-  5,
-);
-export const invitationWorker = registerWorker(
-  QueueName.INVITATION_EXPIRY,
-  processInvitationExpiryJob,
-  2,
-);
-export const billingWorker = registerWorker(
-  QueueName.BILLING_RECONCILIATION,
-  processBillingReconciliationJob,
-  2,
-);
-export const maintenanceWorker = registerWorker(
-  QueueName.MAINTENANCE,
-  processCleanupJob,
-  1,
-);
-export const webhookWorker = registerWorker(
-  QueueName.WEBHOOKS,
-  processWebhookDeliveryJob,
-  5,
-);
-
-logger.info("All background workers registered and listening for queue tasks", {
-  activeQueues: [
-    QueueName.NOTIFICATIONS,
-    QueueName.INVITATION_EXPIRY,
-    QueueName.BILLING_RECONCILIATION,
-    QueueName.MAINTENANCE,
-    QueueName.WEBHOOKS,
-  ],
-});
-
 // -----------------------------------------------------------------------------
 // Periodic Maintenance Scheduler (Runs within worker process)
 // -----------------------------------------------------------------------------
@@ -138,7 +99,45 @@ function startPeriodicTasks(): void {
   }, 120000);
 }
 
-startPeriodicTasks();
+// -----------------------------------------------------------------------------
+// Bootstrap
+// -----------------------------------------------------------------------------
+async function bootstrap(): Promise<void> {
+  // Fail closed: do not register consumers before the security posture check.
+  try {
+    await assertRlsRuntimeRole();
+  } catch (err) {
+    logger.error("Database security posture validation failed", {}, err);
+    await prisma.$disconnect().catch(() => undefined);
+    process.exit(1);
+    return;
+  }
+
+  registerWorker(QueueName.NOTIFICATIONS, processNotificationJob, 5);
+  registerWorker(QueueName.INVITATION_EXPIRY, processInvitationExpiryJob, 2);
+  registerWorker(
+    QueueName.BILLING_RECONCILIATION,
+    processBillingReconciliationJob,
+    2,
+  );
+  registerWorker(QueueName.MAINTENANCE, processCleanupJob, 1);
+  registerWorker(QueueName.WEBHOOKS, processWebhookDeliveryJob, 5);
+
+  logger.info(
+    "All background workers registered and listening for queue tasks",
+    {
+      activeQueues: [
+        QueueName.NOTIFICATIONS,
+        QueueName.INVITATION_EXPIRY,
+        QueueName.BILLING_RECONCILIATION,
+        QueueName.MAINTENANCE,
+        QueueName.WEBHOOKS,
+      ],
+    },
+  );
+
+  startPeriodicTasks();
+}
 
 // -----------------------------------------------------------------------------
 // Graceful Shutdown
@@ -204,3 +203,5 @@ process.on("uncaughtException", (error) => {
 });
 
 export { workers, processedJobsCount, failedJobsCount };
+
+void bootstrap();

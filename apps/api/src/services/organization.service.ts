@@ -1,6 +1,9 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   prisma,
+  withAdminBypassTransaction,
+  withTenantTransaction,
+  withUserTransaction,
   type Organization,
   type Membership,
   type MembershipRole,
@@ -36,18 +39,25 @@ export async function createOrganization(
 ): Promise<Organization & { role: MembershipRole }> {
   const chosenSlug = normalizeSlug(params.slug || params.name);
 
-  // Check slug uniqueness beforehand or let DB constraint catch it
-  const existing = await prisma.organization.findUnique({
-    where: { slug: chosenSlug },
-  });
+  // Slug lookup is a trusted cross-tenant uniqueness check, so it must run
+  // with the administrative RLS bypass. Only the existence of the slug is read.
+  const existing = await withAdminBypassTransaction((tx) =>
+    tx.organization.findUnique({
+      where: { slug: chosenSlug },
+      select: { id: true },
+    }),
+  );
 
   const finalSlug = existing
     ? `${chosenSlug}-${randomBytes(3).toString("hex")}`
     : chosenSlug;
 
-  const result = await prisma.$transaction(async (tx) => {
+  const organizationId = randomUUID();
+
+  const result = await withTenantTransaction(organizationId, async (tx) => {
     const org = await tx.organization.create({
       data: {
+        id: organizationId,
         name: params.name.trim(),
         slug: finalSlug,
         creatorId: params.creatorId,
@@ -96,26 +106,28 @@ export async function createOrganization(
 export async function listUserOrganizations(
   userId: string,
 ): Promise<Array<Organization & { role: MembershipRole }>> {
-  const memberships = await prisma.membership.findMany({
-    where: {
-      userId,
-      status: "ACTIVE",
-      organization: {
-        deletedAt: null,
+  return withUserTransaction(userId, async (tx) => {
+    const memberships = await tx.membership.findMany({
+      where: {
+        userId,
+        status: "ACTIVE",
+        organization: {
+          deletedAt: null,
+        },
       },
-    },
-    include: {
-      organization: true,
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
+      include: {
+        organization: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
 
-  return memberships.map((m) => ({
-    ...m.organization,
-    role: m.role,
-  }));
+    return memberships.map((m) => ({
+      ...m.organization,
+      role: m.role,
+    }));
+  });
 }
 
 /**
@@ -403,7 +415,7 @@ export async function addMemberToOrganization(
     );
   }
 
-  return prisma.$transaction(async (tx) => {
+  return withTenantTransaction(organizationId, async (tx) => {
     // Atomically enforce member limits
     await assertCanAddMember(organizationId, tx);
 

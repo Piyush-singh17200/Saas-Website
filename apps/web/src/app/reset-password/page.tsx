@@ -39,7 +39,9 @@ function ResetPasswordForm() {
     setError(null);
 
     if (!token.trim()) {
-      setError("Reset token is missing. Please check your reset link or request a new one.");
+      setError(
+        "Reset token is missing. Please check your reset link or request a new one.",
+      );
       return;
     }
 
@@ -62,7 +64,9 @@ function ResetPasswordForm() {
       setIsSuccess(true);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message || "Failed to reset password. The link may have expired.");
+        setError(
+          err.message || "Failed to reset password. The link may have expired.",
+        );
       } else {
         setError("Network error. Please try again.");
       }
@@ -77,7 +81,10 @@ function ResetPasswordForm() {
       <div className="absolute bottom-10 right-10 w-[300px] h-[300px] bg-teal-500/5 rounded-full blur-2xl pointer-events-none -z-10" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <Link href="/" className="flex items-center justify-center gap-3 group mb-2">
+        <Link
+          href="/"
+          className="flex items-center justify-center gap-3 group mb-2"
+        >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-[1px] shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
             <div className="w-full h-full bg-slate-950 rounded-[11px] flex items-center justify-center text-emerald-400 font-bold text-xl">
               W
@@ -110,9 +117,13 @@ function ResetPasswordForm() {
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">Password Updated</h3>
+                <h3 className="text-base font-semibold text-white">
+                  Password Updated
+                </h3>
                 <p className="mt-2 text-xs text-slate-400 leading-relaxed">
-                  Your password has been securely changed and all previous active sessions have been terminated. You can now log in with your new credentials.
+                  Your password has been securely changed and all previous
+                  active sessions have been terminated. You can now log in with
+                  your new credentials.
                 </p>
               </div>
               <div className="pt-2">

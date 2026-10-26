@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   hashToken,
   requestPasswordReset,
@@ -11,7 +11,7 @@ import {
 } from "../services/email-verification.service.js";
 import { deleteUserAccount } from "../services/account-deletion.service.js";
 import { hashPassword } from "../services/password.service.js";
-import { prisma } from "@workspace/database";
+import { prisma, basePrisma } from "@workspace/database";
 import { MembershipRole } from "@workspace/contracts";
 
 // Mock email service
@@ -34,6 +34,10 @@ vi.mock("../services/audit.service.js", () => ({
 }));
 
 describe("Authentication Lifecycle Unit Tests", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("Password Reset Service", () => {
     it("generates consistent SHA-256 token hashes", () => {
       const token = "a1b2c3d4e5f6";
@@ -232,8 +236,12 @@ describe("Authentication Lifecycle Unit Tests", () => {
         emailVerified: false,
         status: "ACTIVE",
       } as any);
-      vi.spyOn(prisma.emailVerificationToken, "deleteMany").mockResolvedValue({ count: 1 });
-      (vi.spyOn(prisma.emailVerificationToken, "create") as any).mockResolvedValue({ id: "ev-resend" } as any);
+      vi.spyOn(prisma.emailVerificationToken, "deleteMany").mockResolvedValue({
+        count: 1,
+      });
+      (
+        vi.spyOn(prisma.emailVerificationToken, "create") as any
+      ).mockResolvedValue({ id: "ev-resend" } as any);
 
       const res = await resendVerificationEmail("resend@example.com");
       expect(res.success).toBe(true);
@@ -326,9 +334,10 @@ describe("Authentication Lifecycle Unit Tests", () => {
       const deleteTokensMock = vi.fn().mockResolvedValue({});
       const deleteUserMock = vi.fn().mockResolvedValue({});
 
-      vi.spyOn(prisma, "$transaction").mockImplementation(
+      vi.spyOn(basePrisma, "$transaction").mockImplementation(
         async (callback: any) => {
           return callback({
+            $executeRaw: vi.fn(),
             organization: { deleteMany: deleteOrgMock },
             membership: { deleteMany: deleteMembershipMock },
             session: { deleteMany: deleteSessionMock },

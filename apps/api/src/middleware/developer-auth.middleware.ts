@@ -7,8 +7,9 @@ import {
 } from "../services/api-key.service.js";
 import { validateSession } from "../services/session.service.js";
 import { env } from "../config/env.js";
-import { prisma } from "@workspace/database";
+import { withTenantTransaction } from "@workspace/database";
 import { logger } from "../lib/logger.js";
+import { continueWithinContext } from "../lib/response-context.js";
 
 declare global {
   namespace Express {
@@ -79,7 +80,11 @@ export async function requireDeveloperOrSessionAuth(
       return;
     }
 
-    next();
+    // API keys are always bound to exactly one organization. Open the tenant
+    // transaction for the remainder of the request.
+    await withTenantTransaction(validated.organizationId, async () => {
+      await continueWithinContext(res, next);
+    });
     return;
   }
 
@@ -119,30 +124,35 @@ export async function requireDeveloperOrSessionAuth(
     req.session = auth.session;
     req.authType = "session";
 
-    // If route specifies an organizationId, verify active membership
+    // If route specifies an organizationId, verify active membership and open
+    // a tenant-scoped transaction for the rest of the request.
     const routeOrgId = getParam(req.params.organizationId);
     if (routeOrgId) {
-      const membership = await prisma.membership.findFirst({
-        where: {
-          organizationId: routeOrgId,
-          userId: auth.user.id,
-          status: "ACTIVE",
-        },
-      });
+      await withTenantTransaction(routeOrgId, async (tx) => {
+        const membership = await tx.membership.findFirst({
+          where: {
+            organizationId: routeOrgId,
+            userId: auth.user.id,
+            status: "ACTIVE",
+          },
+        });
 
-      if (!membership) {
-        res.status(403).json(
-          createErrorResponse(
-            {
-              code: ErrorCode.FORBIDDEN,
-              message: "You are not an active member of this organization",
-            },
-            req.id,
-          ),
-        );
-        return;
-      }
-      req.membership = membership;
+        if (!membership) {
+          res.status(403).json(
+            createErrorResponse(
+              {
+                code: ErrorCode.FORBIDDEN,
+                message: "You are not an active member of this organization",
+              },
+              req.id,
+            ),
+          );
+          return;
+        }
+        req.membership = membership;
+        await continueWithinContext(res, next);
+      });
+      return;
     }
 
     next();

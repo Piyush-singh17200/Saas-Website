@@ -18,7 +18,8 @@ export function getRedisClient(): Redis {
     logger.info(
       "Initializing in-memory Redis client mock for testing/development",
     );
-    const RedisMock = require("ioredis-mock") as typeof import("ioredis-mock").default;
+    const RedisMock =
+      require("ioredis-mock") as typeof import("ioredis-mock").default;
     redisClient = new RedisMock() as unknown as Redis;
     isConnected = true;
     return redisClient;

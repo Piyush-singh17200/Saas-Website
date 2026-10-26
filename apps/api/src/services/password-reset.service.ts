@@ -101,7 +101,11 @@ export async function confirmPasswordReset(
   newPassword: string,
   context: PasswordResetAuditContext = {},
 ): Promise<{ success: boolean; message: string }> {
-  if (!rawToken || typeof rawToken !== "string" || rawToken.trim().length === 0) {
+  if (
+    !rawToken ||
+    typeof rawToken !== "string" ||
+    rawToken.trim().length === 0
+  ) {
     throw new AppError(
       "Invalid or expired password reset token",
       400,

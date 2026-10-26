@@ -96,9 +96,15 @@ export default function LoginPage() {
     try {
       setIsLoading(true);
       if (isUsingRecovery) {
-        await apiClient.verifyMfaRecovery(mfaChallenge.challengeToken, recoveryCode);
+        await apiClient.verifyMfaRecovery(
+          mfaChallenge.challengeToken,
+          recoveryCode,
+        );
       } else {
-        await apiClient.verifyMfaChallenge(mfaChallenge.challengeToken, mfaCode);
+        await apiClient.verifyMfaChallenge(
+          mfaChallenge.challengeToken,
+          mfaCode,
+        );
       }
 
       const orgRes = await apiClient.getOrganizations();
@@ -132,7 +138,10 @@ export default function LoginPage() {
       <div className="absolute bottom-10 right-10 w-[300px] h-[300px] bg-teal-500/5 rounded-full blur-2xl pointer-events-none -z-10" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <Link href="/" className="flex items-center justify-center gap-3 group mb-2">
+        <Link
+          href="/"
+          className="flex items-center justify-center gap-3 group mb-2"
+        >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-[1px] shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
             <div className="w-full h-full bg-slate-950 rounded-[11px] flex items-center justify-center text-emerald-400 font-bold text-xl">
               W
@@ -281,7 +290,9 @@ export default function LoginPage() {
                       pattern="[0-9]{6}"
                       required
                       value={mfaCode}
-                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                      onChange={(e) =>
+                        setMfaCode(e.target.value.replace(/\D/g, ""))
+                      }
                       placeholder="6-digit code"
                       className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950/70 border border-slate-700/80 rounded-xl text-white font-mono tracking-widest text-center text-lg placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
                     />

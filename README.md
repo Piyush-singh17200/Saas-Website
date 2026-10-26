@@ -64,6 +64,10 @@ PORT=4000
 NODE_ENV=development
 DATABASE_URL=postgresql://workspace_user:workspace_pass@localhost:5432/workspace_dev?schema=public
 TEST_DATABASE_URL=postgresql://workspace_user:workspace_pass@localhost:5432/workspace_test?schema=public
+TEST_APP_DATABASE_URL=postgresql://workspace_app:workspace_app_pass@localhost:5432/workspace_test?schema=public
+POSTGRES_APP_USER=workspace_app
+POSTGRES_APP_PASSWORD=workspace_app_pass
+ENFORCE_RLS_RUNTIME=false
 SESSION_COOKIE_NAME=workspace_session
 SESSION_TTL_DAYS=7
 COOKIE_SECURE=false
@@ -85,8 +89,27 @@ pnpm install
 
 The platform enforces database-level isolation through two PostgreSQL roles:
 
-1. **`workspace_user`** (Superuser/Owner): Used for migrations and administrative setup.
-2. **`workspace_app`** (Unprivileged Application Role): Has `NOBYPASSRLS`, subject to `FORCE ROW LEVEL SECURITY`.
+1. **`workspace_user`** (Owner / migration role): Used only for migrations and administrative provisioning.
+2. **`workspace_app`** (Unprivileged runtime role): Has `NOSUPERUSER NOBYPASSRLS`, subject to `FORCE ROW LEVEL SECURITY`. The API and worker must use this role's connection URL.
+
+`docker compose up` creates the app role automatically on a fresh PostgreSQL volume. For an existing database, run the idempotent provisioning script as the owner before starting the API:
+
+```bash
+psql -h localhost -U workspace_user -d workspace_dev \
+  -v app_user=workspace_app \
+  -v app_password=workspace_app_pass \
+  -v db_name=workspace_dev \
+  -f scripts/provision-app-role.sql
+```
+
+Then point the runtime at the app role:
+
+```env
+DATABASE_URL=postgresql://workspace_app:workspace_app_pass@localhost:5432/workspace_dev?schema=public
+ENFORCE_RLS_RUNTIME=true
+```
+
+The API and worker refuse to start when `ENFORCE_RLS_RUNTIME=true` and the connected PostgreSQL role is a superuser or has `BYPASSRLS`.
 
 ### 4.2 Migration Commands
 
@@ -94,12 +117,16 @@ The platform enforces database-level isolation through two PostgreSQL roles:
 # Generate Prisma Client
 pnpm prisma:generate
 
-# In development: Apply migrations
-pnpm --filter @workspace/database db:migrate:dev
+# In development: Apply migrations with the owner/migration URL
+DATABASE_URL=postgresql://workspace_user:workspace_pass@localhost:5432/workspace_dev?schema=public \
+  pnpm --filter @workspace/database db:migrate:dev
 
-# In production / CI: Deploy migrations
-pnpm --filter @workspace/database db:migrate:deploy
+# In production / CI: Deploy migrations with the owner/migration URL
+DATABASE_URL=postgresql://workspace_user:workspace_pass@localhost:5432/workspace_dev?schema=public \
+  pnpm --filter @workspace/database db:migrate:deploy
 ```
+
+The production Compose stack runs migrations in a one-shot `migrate` container and re-applies runtime grants in `provision-app-role` before starting the API/worker. Runtime credentials are never used for schema changes.
 
 ---
 
@@ -258,4 +285,6 @@ pnpm build
 3. **`401 Unauthorized on /api/v1/me`**:
    Verify that your HTTP client or browser is transmitting the `workspace_session` cookie.
 4. **`PostgreSQL Row-Level Security permission denied`**:
-   Ensure `workspace_app` has been granted `USAGE` on schema `app` and table privileges on public tables.
+   Ensure `workspace_app` has been granted `USAGE` on schema `app` and table privileges on public tables. Re-run `scripts/provision-app-role.sql` as the owner after applying migrations.
+5. **`Refusing to start: database role ... bypasses row-level security`**:
+   The API/worker `DATABASE_URL` is still using the owner role. Switch it to the `workspace_app` URL. This check is intentional in production.

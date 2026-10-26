@@ -65,12 +65,14 @@ const INITIAL_DEMO_CARDS: DemoCard[] = [
 export default function HomePage() {
   const [cards, setCards] = useState<DemoCard[]>(INITIAL_DEMO_CARDS);
   const [isAnnual, setIsAnnual] = useState(true);
-  const [activeTab, setActiveTab] = useState<"rls" | "worker" | "security" | "billing">("rls");
+  const [activeTab, setActiveTab] = useState<
+    "rls" | "worker" | "security" | "billing"
+  >("rls");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const moveCard = (id: string, targetStatus: DemoCard["status"]) => {
     setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: targetStatus } : c))
+      prev.map((c) => (c.id === id ? { ...c, status: targetStatus } : c)),
     );
   };
 
@@ -113,19 +115,34 @@ export default function HomePage() {
             </Link>
 
             <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-slate-300">
-              <a href="#demo" className="hover:text-emerald-400 transition-colors">
+              <a
+                href="#demo"
+                className="hover:text-emerald-400 transition-colors"
+              >
                 Interactive Kanban
               </a>
-              <a href="#architecture" className="hover:text-emerald-400 transition-colors">
+              <a
+                href="#architecture"
+                className="hover:text-emerald-400 transition-colors"
+              >
                 Architecture
               </a>
-              <a href="#features" className="hover:text-emerald-400 transition-colors">
+              <a
+                href="#features"
+                className="hover:text-emerald-400 transition-colors"
+              >
                 Features
               </a>
-              <a href="#pricing" className="hover:text-emerald-400 transition-colors">
+              <a
+                href="#pricing"
+                className="hover:text-emerald-400 transition-colors"
+              >
                 Pricing
               </a>
-              <a href="#faq" className="hover:text-emerald-400 transition-colors">
+              <a
+                href="#faq"
+                className="hover:text-emerald-400 transition-colors"
+              >
                 FAQ
               </a>
             </nav>
@@ -159,7 +176,9 @@ export default function HomePage() {
       <section className="relative pt-20 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full flex flex-col items-center text-center">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-900/90 border border-slate-700/80 text-slate-300 mb-8 backdrop-blur shadow-sm">
           <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Next-Generation Multi-Tenant Architecture with Row-Level Security</span>
+          <span>
+            Next-Generation Multi-Tenant Architecture with Row-Level Security
+          </span>
         </div>
 
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white max-w-4xl leading-[1.1] sm:leading-[1.1]">
@@ -171,7 +190,9 @@ export default function HomePage() {
         </h1>
 
         <p className="mt-6 text-base sm:text-lg text-slate-400 max-w-2xl leading-relaxed">
-          WorkSpace combines interactive Kanban project management, BullMQ background queues, Stripe subscription entitlements, and PostgreSQL Row-Level Security into a unified, enterprise-grade platform.
+          WorkSpace combines interactive Kanban project management, BullMQ
+          background queues, Stripe subscription entitlements, and PostgreSQL
+          Row-Level Security into a unified, enterprise-grade platform.
         </p>
 
         {/* Call to action buttons */}
@@ -222,7 +243,10 @@ export default function HomePage() {
       </section>
 
       {/* Interactive Live Kanban Canvas Demo */}
-      <section id="demo" className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+      <section
+        id="demo"
+        className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full"
+      >
         <div className="rounded-3xl bg-slate-900/70 border border-slate-800 p-6 sm:p-8 backdrop-blur shadow-2xl relative overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-800">
             <div>
@@ -234,7 +258,8 @@ export default function HomePage() {
                 Live Kanban Board Simulator
               </h2>
               <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                Click any task&apos;s status pill to move it across columns in real-time.
+                Click any task&apos;s status pill to move it across columns in
+                real-time.
               </p>
             </div>
 
@@ -259,115 +284,123 @@ export default function HomePage() {
 
           {/* Kanban Columns Grid */}
           <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-            {(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"] as const).map((col) => {
-              const colCards = cards.filter((c) => c.status === col);
-              const colTitle =
-                col === "TODO"
-                  ? "To Do"
-                  : col === "IN_PROGRESS"
-                  ? "In Progress"
-                  : col === "IN_REVIEW"
-                  ? "In Review"
-                  : "Done";
+            {(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"] as const).map(
+              (col) => {
+                const colCards = cards.filter((c) => c.status === col);
+                const colTitle =
+                  col === "TODO"
+                    ? "To Do"
+                    : col === "IN_PROGRESS"
+                      ? "In Progress"
+                      : col === "IN_REVIEW"
+                        ? "In Review"
+                        : "Done";
 
-              const colBorder =
-                col === "DONE"
-                  ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-400"
-                  : col === "IN_PROGRESS"
-                  ? "border-indigo-500/30 bg-indigo-500/5 text-indigo-400"
-                  : col === "IN_REVIEW"
-                  ? "border-amber-500/30 bg-amber-500/5 text-amber-400"
-                  : "border-slate-800 bg-slate-950/60 text-slate-400";
+                const colBorder =
+                  col === "DONE"
+                    ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-400"
+                    : col === "IN_PROGRESS"
+                      ? "border-indigo-500/30 bg-indigo-500/5 text-indigo-400"
+                      : col === "IN_REVIEW"
+                        ? "border-amber-500/30 bg-amber-500/5 text-amber-400"
+                        : "border-slate-800 bg-slate-950/60 text-slate-400";
 
-              return (
-                <div
-                  key={col}
-                  className={`rounded-2xl border p-4 flex flex-col min-h-[300px] ${colBorder}`}
-                >
-                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/60">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                      {colTitle}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-400">
-                      {colCards.length}
-                    </span>
-                  </div>
+                return (
+                  <div
+                    key={col}
+                    className={`rounded-2xl border p-4 flex flex-col min-h-[300px] ${colBorder}`}
+                  >
+                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/60">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                        {colTitle}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-400">
+                        {colCards.length}
+                      </span>
+                    </div>
 
-                  <div className="space-y-3 flex-1">
-                    {colCards.map((card) => (
-                      <div
-                        key={card.id}
-                        className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all shadow-sm group"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] font-mono text-emerald-400">
-                            {card.id}
-                          </span>
-                          <span
-                            className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                              card.priority === "URGENT"
-                                ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                                : card.priority === "HIGH"
-                                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                                : "bg-slate-800 text-slate-400"
-                            }`}
-                          >
-                            {card.priority}
-                          </span>
-                        </div>
-
-                        <p className="text-xs font-medium text-slate-200 group-hover:text-white leading-snug mb-3">
-                          {card.title}
-                        </p>
-
-                        <div className="flex flex-wrap gap-1 mb-3">
-                          {card.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 font-mono"
-                            >
-                              #{tag}
+                    <div className="space-y-3 flex-1">
+                      {colCards.map((card) => (
+                        <div
+                          key={card.id}
+                          className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all shadow-sm group"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-mono text-emerald-400">
+                              {card.id}
                             </span>
-                          ))}
+                            <span
+                              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                                card.priority === "URGENT"
+                                  ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                                  : card.priority === "HIGH"
+                                    ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                    : "bg-slate-800 text-slate-400"
+                              }`}
+                            >
+                              {card.priority}
+                            </span>
+                          </div>
+
+                          <p className="text-xs font-medium text-slate-200 group-hover:text-white leading-snug mb-3">
+                            {card.title}
+                          </p>
+
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {card.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 font-mono"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                            <span className="text-[11px] text-slate-400">
+                              {card.assignee}
+                            </span>
+
+                            {/* Quick Move Selector */}
+                            <select
+                              value={card.status}
+                              onChange={(e) =>
+                                moveCard(
+                                  card.id,
+                                  e.target.value as DemoCard["status"],
+                                )
+                              }
+                              className="bg-slate-950 border border-slate-700/80 rounded-lg text-[10px] text-slate-300 py-0.5 px-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            >
+                              <option value="TODO">To Do</option>
+                              <option value="IN_PROGRESS">In Progress</option>
+                              <option value="IN_REVIEW">In Review</option>
+                              <option value="DONE">Done</option>
+                            </select>
+                          </div>
                         </div>
+                      ))}
 
-                        <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
-                          <span className="text-[11px] text-slate-400">
-                            {card.assignee}
-                          </span>
-
-                          {/* Quick Move Selector */}
-                          <select
-                            value={card.status}
-                            onChange={(e) =>
-                              moveCard(card.id, e.target.value as DemoCard["status"])
-                            }
-                            className="bg-slate-950 border border-slate-700/80 rounded-lg text-[10px] text-slate-300 py-0.5 px-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                          >
-                            <option value="TODO">To Do</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="IN_REVIEW">In Review</option>
-                            <option value="DONE">Done</option>
-                          </select>
+                      {colCards.length === 0 && (
+                        <div className="h-24 border border-dashed border-slate-800/60 rounded-xl flex items-center justify-center text-xs text-slate-600">
+                          No tasks
                         </div>
-                      </div>
-                    ))}
-
-                    {colCards.length === 0 && (
-                      <div className="h-24 border border-dashed border-slate-800/60 rounded-xl flex items-center justify-center text-xs text-slate-600">
-                        No tasks
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              },
+            )}
           </div>
         </div>
       </section>
 
       {/* Architecture Deep Dive Interactive Tabs */}
-      <section id="architecture" className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+      <section
+        id="architecture"
+        className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full"
+      >
         <div className="text-center max-w-3xl mx-auto mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 mb-3">
             <Server className="w-3.5 h-3.5" />
@@ -377,7 +410,8 @@ export default function HomePage() {
             Production Architecture Deep Dive
           </h2>
           <p className="text-sm sm:text-base text-slate-400 mt-2">
-            Engineered to enterprise standards with strict separation of concerns across web, API, database, and background workers.
+            Engineered to enterprise standards with strict separation of
+            concerns across web, API, database, and background workers.
           </p>
         </div>
 
@@ -420,20 +454,33 @@ export default function HomePage() {
                   PostgreSQL Row-Level Security (RLS)
                 </h3>
                 <p className="text-sm text-slate-400 leading-relaxed">
-                  Unlike traditional apps that rely solely on application-level filtering, WorkSpace sets <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded font-mono">app.current_organization_id</code> on every single database transaction.
+                  Unlike traditional apps that rely solely on application-level
+                  filtering, WorkSpace sets{" "}
+                  <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded font-mono">
+                    app.current_organization_id
+                  </code>{" "}
+                  on every single database transaction.
                 </p>
                 <ul className="space-y-2 text-xs text-slate-300">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Unprivileged role <code>workspace_app</code> with <code>FORCE ROW LEVEL SECURITY</code></span>
+                    <span>
+                      Unprivileged role <code>workspace_app</code> with{" "}
+                      <code>FORCE ROW LEVEL SECURITY</code>
+                    </span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Zero possibility of cross-tenant data leaks, even if SQL is altered</span>
+                    <span>
+                      Zero possibility of cross-tenant data leaks, even if SQL
+                      is altered
+                    </span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Validated by automated cross-tenant injection test suites</span>
+                    <span>
+                      Validated by automated cross-tenant injection test suites
+                    </span>
                   </li>
                 </ul>
               </div>
@@ -444,7 +491,7 @@ export default function HomePage() {
                   <span className="text-emerald-400">ENFORCED</span>
                 </div>
                 <pre className="text-slate-400 leading-relaxed">
-{`CREATE POLICY tenant_isolation_policy ON projects
+                  {`CREATE POLICY tenant_isolation_policy ON projects
   FOR ALL
   TO workspace_app
   USING (
@@ -470,20 +517,30 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
                   BullMQ & Redis Background Queues
                 </h3>
                 <p className="text-sm text-slate-400 leading-relaxed">
-                  Asynchronous jobs (email notifications, invitation expiry sweeps, transactional outbox relays, and webhook deliveries) are dispatched through Redis-backed queues.
+                  Asynchronous jobs (email notifications, invitation expiry
+                  sweeps, transactional outbox relays, and webhook deliveries)
+                  are dispatched through Redis-backed queues.
                 </p>
                 <ul className="space-y-2 text-xs text-slate-300">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
-                    <span>Transactional Outbox Pattern guarantees at-least-once delivery</span>
+                    <span>
+                      Transactional Outbox Pattern guarantees at-least-once
+                      delivery
+                    </span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
-                    <span>Automatic exponential backoff retries with dead-letter queue isolation</span>
+                    <span>
+                      Automatic exponential backoff retries with dead-letter
+                      queue isolation
+                    </span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
-                    <span>Redis fail-closed rate limiter preventing API abuse</span>
+                    <span>
+                      Redis fail-closed rate limiter preventing API abuse
+                    </span>
                   </li>
                 </ul>
               </div>
@@ -494,7 +551,7 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
                   <span className="text-teal-400">ACTIVE</span>
                 </div>
                 <pre className="text-slate-400 leading-relaxed">
-{`export const notificationWorker = new Worker(
+                  {`export const notificationWorker = new Worker(
   "notifications",
   async (job) => {
     const { organizationId, userId, payload } = job.data;
@@ -519,20 +576,29 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
                   Enterprise Security & TOTP MFA
                 </h3>
                 <p className="text-sm text-slate-400 leading-relaxed">
-                  Protect every team member with RFC 6238 TOTP two-factor authentication, hashed recovery codes, immediate active session revocation, and immutable audit logs.
+                  Protect every team member with RFC 6238 TOTP two-factor
+                  authentication, hashed recovery codes, immediate active
+                  session revocation, and immutable audit logs.
                 </p>
                 <ul className="space-y-2 text-xs text-slate-300">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                    <span>Google Authenticator & 1Password TOTP compliance</span>
+                    <span>
+                      Google Authenticator & 1Password TOTP compliance
+                    </span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                    <span>Active session revocation across devices in real-time</span>
+                    <span>
+                      Active session revocation across devices in real-time
+                    </span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                    <span>Complete audit trail capturing actors, IP origins, and resources</span>
+                    <span>
+                      Complete audit trail capturing actors, IP origins, and
+                      resources
+                    </span>
                   </li>
                 </ul>
               </div>
@@ -543,7 +609,7 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
                   <span className="text-indigo-400">RECORDING</span>
                 </div>
                 <pre className="text-slate-400 leading-relaxed">
-{`await auditService.recordEvent({
+                  {`await auditService.recordEvent({
   organizationId,
   actorId: user.id,
   action: "auth.mfa.verified",
@@ -566,12 +632,17 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
                   Stripe Subscriptions & Entitlements
                 </h3>
                 <p className="text-sm text-slate-400 leading-relaxed">
-                  Robust subscription management with Stripe Checkout and Customer Portal. Server-side entitlements gate projects and team member limits with optimistic concurrency control.
+                  Robust subscription management with Stripe Checkout and
+                  Customer Portal. Server-side entitlements gate projects and
+                  team member limits with optimistic concurrency control.
                 </p>
                 <ul className="space-y-2 text-xs text-slate-300">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
-                    <span>Server-side quota checks before creating projects or invitations</span>
+                    <span>
+                      Server-side quota checks before creating projects or
+                      invitations
+                    </span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
@@ -579,7 +650,10 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
-                    <span>Self-serve Stripe billing portal for invoices & card changes</span>
+                    <span>
+                      Self-serve Stripe billing portal for invoices & card
+                      changes
+                    </span>
                   </li>
                 </ul>
               </div>
@@ -590,7 +664,7 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
                   <span className="text-cyan-400">ENFORCING</span>
                 </div>
                 <pre className="text-slate-400 leading-relaxed">
-{`export async function assertCanCreateProject(orgId: string) {
+                  {`export async function assertCanCreateProject(orgId: string) {
   const { currentCount, maxAllowed } = await getProjectQuota(orgId);
   if (currentCount >= maxAllowed) {
     throw new EntitlementError(
@@ -606,7 +680,10 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
       </section>
 
       {/* Pricing Table Section */}
-      <section id="pricing" className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+      <section
+        id="pricing"
+        className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full"
+      >
         <div className="text-center max-w-3xl mx-auto mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 mb-3">
             <CreditCard className="w-3.5 h-3.5" />
@@ -616,7 +693,8 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
             Simple, Transparent Plans
           </h2>
           <p className="text-sm sm:text-base text-slate-400 mt-2">
-            Scale seamlessly from agile teams to enterprise deployments with dedicated database isolation.
+            Scale seamlessly from agile teams to enterprise deployments with
+            dedicated database isolation.
           </p>
 
           {/* Monthly / Annual Toggle */}
@@ -624,7 +702,9 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
             <button
               onClick={() => setIsAnnual(false)}
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                !isAnnual ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-white"
+                !isAnnual
+                  ? "bg-slate-800 text-white shadow-sm"
+                  : "text-slate-400 hover:text-white"
               }`}
             >
               Monthly Billing
@@ -632,11 +712,15 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
             <button
               onClick={() => setIsAnnual(true)}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                isAnnual ? "bg-emerald-500 text-slate-950 font-bold shadow-sm" : "text-slate-400 hover:text-white"
+                isAnnual
+                  ? "bg-emerald-500 text-slate-950 font-bold shadow-sm"
+                  : "text-slate-400 hover:text-white"
               }`}
             >
               <span>Annual Billing</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${isAnnual ? "bg-slate-950 text-emerald-300" : "bg-emerald-500/20 text-emerald-400"}`}>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${isAnnual ? "bg-slate-950 text-emerald-300" : "bg-emerald-500/20 text-emerald-400"}`}
+              >
                 Save 20%
               </span>
             </button>
@@ -656,10 +740,14 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
               </div>
               <div className="mb-6">
                 <span className="text-4xl font-extrabold text-white">$0</span>
-                <span className="text-xs text-slate-400 font-mono"> / forever</span>
+                <span className="text-xs text-slate-400 font-mono">
+                  {" "}
+                  / forever
+                </span>
               </div>
               <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-                Essential tools for early-stage teams wanting guaranteed tenant data isolation.
+                Essential tools for early-stage teams wanting guaranteed tenant
+                data isolation.
               </p>
               <ul className="space-y-3 text-xs text-slate-300 pb-6 border-b border-slate-800/80">
                 <li className="flex items-center gap-2">
@@ -709,19 +797,27 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
                 <span className="text-4xl font-extrabold text-white">
                   {isAnnual ? "$24" : "$29"}
                 </span>
-                <span className="text-xs text-slate-400 font-mono"> / month</span>
+                <span className="text-xs text-slate-400 font-mono">
+                  {" "}
+                  / month
+                </span>
               </div>
               <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-                Full-throttle productivity for scaling companies with advanced security and background queues.
+                Full-throttle productivity for scaling companies with advanced
+                security and background queues.
               </p>
               <ul className="space-y-3 text-xs text-slate-300 pb-6 border-b border-slate-800/80">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="font-semibold text-white">Up to 25 Active Projects</span>
+                  <span className="font-semibold text-white">
+                    Up to 25 Active Projects
+                  </span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="font-semibold text-white">Up to 50 Team Members</span>
+                  <span className="font-semibold text-white">
+                    Up to 50 Team Members
+                  </span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -759,10 +855,14 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
                 <span className="text-4xl font-extrabold text-white">
                   {isAnnual ? "$159" : "$199"}
                 </span>
-                <span className="text-xs text-slate-400 font-mono"> / month</span>
+                <span className="text-xs text-slate-400 font-mono">
+                  {" "}
+                  / month
+                </span>
               </div>
               <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-                Dedicated infrastructure, custom data retention, and custom contracts for regulated industries.
+                Dedicated infrastructure, custom data retention, and custom
+                contracts for regulated industries.
               </p>
               <ul className="space-y-3 text-xs text-slate-300 pb-6 border-b border-slate-800/80">
                 <li className="flex items-center gap-2">
@@ -795,11 +895,17 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
       </section>
 
       {/* FAQ Accordion */}
-      <section id="faq" className="py-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full">
+      <section
+        id="faq"
+        className="py-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full"
+      >
         <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold text-white">Frequently Asked Questions</h2>
+          <h2 className="text-3xl font-bold text-white">
+            Frequently Asked Questions
+          </h2>
           <p className="text-xs sm:text-sm text-slate-400 mt-2">
-            Everything you need to know about tenant isolation, billing, and system operations.
+            Everything you need to know about tenant isolation, billing, and
+            system operations.
           </p>
         </div>
 
@@ -858,7 +964,8 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
               Ready to deploy your tenant workspace?
             </h2>
             <p className="text-sm text-slate-400">
-              Join engineering-first organizations operating with deterministic data safety, fast workflows, and modern tooling.
+              Join engineering-first organizations operating with deterministic
+              data safety, fast workflows, and modern tooling.
             </p>
             <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
               <Link
@@ -885,23 +992,41 @@ ALTER TABLE projects FORCE ROW LEVEL SECURITY;`}
             <div className="w-6 h-6 rounded-md bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-xs">
               W
             </div>
-            <span>© {new Date().getFullYear()} WorkSpace Multi-Tenant SaaS. All rights reserved.</span>
+            <span>
+              © {new Date().getFullYear()} WorkSpace Multi-Tenant SaaS. All
+              rights reserved.
+            </span>
           </div>
 
           <div className="flex items-center gap-6">
-            <Link href="/login" className="hover:text-slate-300 transition-colors">
+            <Link
+              href="/login"
+              className="hover:text-slate-300 transition-colors"
+            >
               Sign In
             </Link>
-            <Link href="/register" className="hover:text-slate-300 transition-colors">
+            <Link
+              href="/register"
+              className="hover:text-slate-300 transition-colors"
+            >
               Sign Up
             </Link>
-            <Link href="/organizations" className="hover:text-slate-300 transition-colors">
+            <Link
+              href="/organizations"
+              className="hover:text-slate-300 transition-colors"
+            >
               Organizations Hub
             </Link>
-            <Link href="/privacy" className="hover:text-slate-300 transition-colors">
+            <Link
+              href="/privacy"
+              className="hover:text-slate-300 transition-colors"
+            >
               Privacy Policy
             </Link>
-            <Link href="/terms" className="hover:text-slate-300 transition-colors">
+            <Link
+              href="/terms"
+              className="hover:text-slate-300 transition-colors"
+            >
               Terms of Service
             </Link>
             <a

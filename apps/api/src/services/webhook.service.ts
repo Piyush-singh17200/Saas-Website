@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { prisma } from "@workspace/database";
+import { prisma, withDetachedTenantTransaction } from "@workspace/database";
 import {
   type CreateWebhookSubscriptionInput,
   type CreateWebhookSubscriptionResult,
@@ -356,71 +356,77 @@ export async function dispatchWebhookEvent(
   resourceId: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
-  // Find all active subscriptions for this tenant
-  const subscriptions = await prisma.webhookSubscription.findMany({
-    where: {
-      organizationId,
-      isActive: true,
-    },
-  });
-
-  if (subscriptions.length === 0) {
-    return;
-  }
-
-  // Filter subscriptions matching the event type (or wildcard)
-  const matching = subscriptions.filter(
-    (sub) => sub.eventTypes.includes("*") || sub.eventTypes.includes(eventType),
-  );
-
-  if (matching.length === 0) {
-    return;
-  }
-
-  const event: WebhookEventEnvelope = {
-    id: crypto.randomUUID(),
-    type: eventType,
-    version: "2026-10-11",
-    createdAt: new Date().toISOString(),
-    organizationId,
-    resourceId,
-    payload,
-  };
-
-  // For each matching subscription, record delivery record and enqueue delivery job
-  for (const sub of matching) {
-    try {
-      const delivery = await prisma.webhookDelivery.create({
-        data: {
-          subscriptionId: sub.id,
-          organizationId,
-          eventId: event.id,
-          eventType: event.type,
-          payload: event as any,
-          status: "PENDING",
-          attemptCount: 1,
-        },
-      });
-
-      await queueManager.enqueueWebhookDelivery({
-        deliveryId: delivery.id,
-        subscriptionId: sub.id,
+  // This is intentionally invoked without awaiting from request handlers. Use
+  // a detached tenant transaction so the dispatch cannot race the request
+  // transaction's commit/close while still being constrained by RLS.
+  return withDetachedTenantTransaction(organizationId, async () => {
+    // Find all active subscriptions for this tenant
+    const subscriptions = await prisma.webhookSubscription.findMany({
+      where: {
         organizationId,
-        event,
-        attempt: 1,
-      });
-    } catch (err) {
-      logger.error(
-        "Failed to enqueue webhook delivery",
-        {
-          organizationId,
-          subscriptionId: sub.id,
-          eventType,
-        },
-        err,
-      );
+        isActive: true,
+      },
+    });
+
+    if (subscriptions.length === 0) {
+      return;
     }
-  }
+
+    // Filter subscriptions matching the event type (or wildcard)
+    const matching = subscriptions.filter(
+      (sub) =>
+        sub.eventTypes.includes("*") || sub.eventTypes.includes(eventType),
+    );
+
+    if (matching.length === 0) {
+      return;
+    }
+
+    const event: WebhookEventEnvelope = {
+      id: crypto.randomUUID(),
+      type: eventType,
+      version: "2026-10-11",
+      createdAt: new Date().toISOString(),
+      organizationId,
+      resourceId,
+      payload,
+    };
+
+    // For each matching subscription, record delivery record and enqueue delivery job
+    for (const sub of matching) {
+      try {
+        const delivery = await prisma.webhookDelivery.create({
+          data: {
+            subscriptionId: sub.id,
+            organizationId,
+            eventId: event.id,
+            eventType: event.type,
+            payload: event as any,
+            status: "PENDING",
+            attemptCount: 1,
+          },
+        });
+
+        await queueManager.enqueueWebhookDelivery({
+          deliveryId: delivery.id,
+          subscriptionId: sub.id,
+          organizationId,
+          event,
+          attempt: 1,
+        });
+      } catch (err) {
+        logger.error(
+          "Failed to enqueue webhook delivery",
+          {
+            organizationId,
+            subscriptionId: sub.id,
+            eventType,
+          },
+          err,
+        );
+      }
+    }
+  });
 }
 
 /**

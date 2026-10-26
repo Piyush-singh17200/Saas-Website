@@ -133,37 +133,34 @@ test.describe("E2E User Journey: Projects & Advanced Tasks", () => {
     );
 
     // Mock organization tags
-    await page.route(
-      `**/api/v1/organizations/${orgId}/tags`,
-      async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            success: true,
-            data: {
-              tags: [
-                {
-                  id: "5f1c0a52-3f4e-4a9b-9c2d-1a2b3c4d5e65",
-                  organizationId: orgId,
-                  name: "Security",
-                  color: "#EF4444",
-                  createdAt: new Date().toISOString(),
-                },
-                {
-                  id: "7f1c0a52-3f4e-4a9b-9c2d-1a2b3c4d5e67",
-                  organizationId: orgId,
-                  name: "Database",
-                  color: "#3B82F6",
-                  createdAt: new Date().toISOString(),
-                },
-              ],
-            },
-            meta: { requestId: "req-e2e-tags" },
-          }),
-        });
-      },
-    );
+    await page.route(`**/api/v1/organizations/${orgId}/tags`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            tags: [
+              {
+                id: "5f1c0a52-3f4e-4a9b-9c2d-1a2b3c4d5e65",
+                organizationId: orgId,
+                name: "Security",
+                color: "#EF4444",
+                createdAt: new Date().toISOString(),
+              },
+              {
+                id: "7f1c0a52-3f4e-4a9b-9c2d-1a2b3c4d5e67",
+                organizationId: orgId,
+                name: "Database",
+                color: "#3B82F6",
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          },
+          meta: { requestId: "req-e2e-tags" },
+        }),
+      });
+    });
   });
 
   test("renders task board with priorities, tags, and search input", async ({
@@ -186,16 +183,28 @@ test.describe("E2E User Journey: Projects & Advanced Tasks", () => {
 
     // Verify Priority and Tag elements
     await expect(
-      page.locator("span").filter({ hasText: /^HIGH$/ }).first(),
+      page
+        .locator("span")
+        .filter({ hasText: /^HIGH$/ })
+        .first(),
     ).toBeVisible();
     await expect(
-      page.locator("span").filter({ hasText: /^URGENT$/ }).first(),
+      page
+        .locator("span")
+        .filter({ hasText: /^URGENT$/ })
+        .first(),
     ).toBeVisible();
     await expect(
-      page.locator("span").filter({ hasText: /^Security$/ }).first(),
+      page
+        .locator("span")
+        .filter({ hasText: /^Security$/ })
+        .first(),
     ).toBeVisible();
     await expect(
-      page.locator("span").filter({ hasText: /^Database$/ }).first(),
+      page
+        .locator("span")
+        .filter({ hasText: /^Database$/ })
+        .first(),
     ).toBeVisible();
 
     // Verify Search and Filters

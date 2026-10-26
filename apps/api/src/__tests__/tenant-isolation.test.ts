@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@workspace/database";
 import { randomUUID } from "node:crypto";
+import { testAppDatabaseUrl, testDatabaseUrl } from "./test-env.js";
 
 describe("PostgreSQL Row-Level Security (RLS) Tenant Isolation", () => {
   // Admin client for test fixture setup (table owner / superuser)
   const adminDb = new PrismaClient({
     datasources: {
       db: {
-        url: "postgresql://workspace_user:workspace_pass@127.0.0.1:5433/workspace_test?schema=public",
+        url: testDatabaseUrl,
       },
     },
   });
@@ -16,7 +17,7 @@ describe("PostgreSQL Row-Level Security (RLS) Tenant Isolation", () => {
   const appDb = new PrismaClient({
     datasources: {
       db: {
-        url: "postgresql://workspace_app:workspace_app_pass@127.0.0.1:5433/workspace_test?schema=public",
+        url: testAppDatabaseUrl,
       },
     },
   });
