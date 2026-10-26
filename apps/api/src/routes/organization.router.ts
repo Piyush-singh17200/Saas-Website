@@ -34,6 +34,9 @@ import { activityRouter } from "./activity.router.js";
 import { billingRouter } from "./billing.router.js";
 import { notificationRouter } from "./notification.router.js";
 import { invitationRouter } from "./invitation.router.js";
+import { attachmentRouter } from "./attachment.router.js";
+import { orgTagRouter } from "./tag.router.js";
+import { developerRouter } from "./developer.router.js";
 
 export const organizationRouter: Router = Router();
 
@@ -51,7 +54,9 @@ organizationRouter.use("/:organizationId/activity", activityRouter);
 organizationRouter.use("/:organizationId/billing", billingRouter);
 organizationRouter.use("/:organizationId/notifications", notificationRouter);
 organizationRouter.use("/:organizationId/invitations", invitationRouter);
-
+organizationRouter.use("/:organizationId/attachments", attachmentRouter);
+organizationRouter.use("/:organizationId/tags", orgTagRouter);
+organizationRouter.use("/:organizationId/developer", developerRouter);
 
 /**
  * POST /api/v1/organizations

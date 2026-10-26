@@ -8,6 +8,7 @@ import {
   type BillingReconciliationJobPayload,
   type CleanupJobPayload,
   type QueueMetrics,
+  type WebhookDeliveryJobPayload,
 } from "@workspace/contracts";
 import { getRedisClient } from "../lib/redis.js";
 import { logger } from "../lib/logger.js";
@@ -47,7 +48,9 @@ class QueueManager {
   /**
    * Enqueues a notification job with domain-level deduplication.
    */
-  public async enqueueNotification(payload: NotificationJobPayload): Promise<string> {
+  public async enqueueNotification(
+    payload: NotificationJobPayload,
+  ): Promise<string> {
     const queue = this.getQueue(QueueName.NOTIFICATIONS);
     const jobId = `notification:${payload.idempotencyKey}`;
 
@@ -74,7 +77,9 @@ class QueueManager {
   /**
    * Enqueues an invitation expiry sweep job.
    */
-  public async enqueueInvitationExpiry(payload: InvitationExpiryJobPayload = { sweepOnly: true }): Promise<string> {
+  public async enqueueInvitationExpiry(
+    payload: InvitationExpiryJobPayload = { sweepOnly: true },
+  ): Promise<string> {
     const queue = this.getQueue(QueueName.INVITATION_EXPIRY);
     const jobId = payload.invitationId
       ? `invitation-expiry:${payload.invitationId}`
@@ -101,7 +106,9 @@ class QueueManager {
   /**
    * Enqueues a billing reconciliation job.
    */
-  public async enqueueBillingReconciliation(payload: BillingReconciliationJobPayload): Promise<string> {
+  public async enqueueBillingReconciliation(
+    payload: BillingReconciliationJobPayload,
+  ): Promise<string> {
     const queue = this.getQueue(QueueName.BILLING_RECONCILIATION);
     const jobId = `billing-reconcile:${payload.organizationId}:${Math.floor(Date.now() / 300000)}`;
 
@@ -127,7 +134,9 @@ class QueueManager {
   /**
    * Enqueues a cleanup/maintenance job.
    */
-  public async enqueueMaintenance(payload: CleanupJobPayload = { retentionDays: 30, scope: "all" }): Promise<string> {
+  public async enqueueMaintenance(
+    payload: CleanupJobPayload = { retentionDays: 30, scope: "all" },
+  ): Promise<string> {
     const queue = this.getQueue(QueueName.MAINTENANCE);
     const jobId = `maintenance:${payload.scope}:${Math.floor(Date.now() / 3600000)}`;
 
@@ -145,6 +154,36 @@ class QueueManager {
       queueName: QueueName.MAINTENANCE,
       scope: payload.scope,
       correlationId: payload.correlationId,
+    });
+
+    return job.id || jobId;
+  }
+
+  /**
+   * Enqueues an asynchronous webhook delivery job with exponential backoff and jitter.
+   */
+  public async enqueueWebhookDelivery(
+    payload: WebhookDeliveryJobPayload,
+  ): Promise<string> {
+    const queue = this.getQueue(QueueName.WEBHOOKS);
+    const jobId = `webhook:${payload.subscriptionId}:${payload.event.id}:${payload.attempt || 1}`;
+
+    const job = await queue.add("deliver-webhook", payload, {
+      jobId,
+      attempts: 5,
+      backoff: {
+        type: "exponential",
+        delay: 3000,
+      },
+    });
+
+    logger.info("Webhook delivery job enqueued", {
+      jobId: job.id,
+      queueName: QueueName.WEBHOOKS,
+      subscriptionId: payload.subscriptionId,
+      eventId: payload.event.id,
+      eventType: payload.event.type,
+      attempt: payload.attempt,
     });
 
     return job.id || jobId;
@@ -183,7 +222,13 @@ class QueueManager {
     const queue = this.getQueue(name);
     try {
       const [counts, isPaused] = await Promise.all([
-        queue.getJobCounts("waiting", "active", "completed", "failed", "delayed"),
+        queue.getJobCounts(
+          "waiting",
+          "active",
+          "completed",
+          "failed",
+          "delayed",
+        ),
         queue.isPaused(),
       ]);
 

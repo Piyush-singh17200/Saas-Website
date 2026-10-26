@@ -40,7 +40,11 @@ const SENSITIVE_KEYS = new Set([
 /**
  * Recursively redacts sensitive keys and values from an arbitrary object or array.
  */
-export function redactSensitiveData(data: unknown, depth = 0, seen = new WeakSet()): unknown {
+export function redactSensitiveData(
+  data: unknown,
+  depth = 0,
+  seen = new WeakSet(),
+): unknown {
   if (depth > 8) return "[MAX_DEPTH_REACHED]";
   if (data === null || data === undefined) return data;
 
@@ -75,7 +79,11 @@ export function redactSensitiveData(data: unknown, depth = 0, seen = new WeakSet
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
     const lowerKey = key.toLowerCase();
-    const isSensitive = SENSITIVE_KEYS.has(lowerKey) || lowerKey.includes("password") || lowerKey.includes("secret") || lowerKey.includes("token");
+    const isSensitive =
+      SENSITIVE_KEYS.has(lowerKey) ||
+      lowerKey.includes("password") ||
+      lowerKey.includes("secret") ||
+      lowerKey.includes("token");
 
     if (typeof value === "object" && value !== null) {
       result[key] = redactSensitiveData(value, depth + 1, seen);
@@ -98,14 +106,21 @@ export class StructuredLogger {
     this.environment = process.env.NODE_ENV || "development";
   }
 
-  private log(severity: LogSeverity, message: string, context?: LogContext, error?: unknown): void {
+  private log(
+    severity: LogSeverity,
+    message: string,
+    context?: LogContext,
+    error?: unknown,
+  ): void {
     const isTest = this.environment === "test";
     if (isTest && severity !== "error" && !process.env.DEBUG_LOGS) {
       return;
     }
 
     const correlationId = context?.correlationId || context?.requestId;
-    const sanitizedContext = context ? (redactSensitiveData(context) as Record<string, unknown>) : undefined;
+    const sanitizedContext = context
+      ? (redactSensitiveData(context) as Record<string, unknown>)
+      : undefined;
     const sanitizedError = error ? redactSensitiveData(error) : undefined;
 
     const entry: Record<string, unknown> = {
@@ -123,9 +138,11 @@ export class StructuredLogger {
     if (sanitizedContext) {
       if (sanitizedContext.jobId) entry.jobId = sanitizedContext.jobId;
       if (sanitizedContext.jobType) entry.jobType = sanitizedContext.jobType;
-      if (sanitizedContext.queueName) entry.queueName = sanitizedContext.queueName;
+      if (sanitizedContext.queueName)
+        entry.queueName = sanitizedContext.queueName;
       if (sanitizedContext.route) entry.route = sanitizedContext.route;
-      if (sanitizedContext.durationMs !== undefined) entry.durationMs = sanitizedContext.durationMs;
+      if (sanitizedContext.durationMs !== undefined)
+        entry.durationMs = sanitizedContext.durationMs;
 
       entry.context = sanitizedContext;
     }

@@ -17,7 +17,9 @@ export async function processBillingReconciliationJob(
       jobId: job.id,
       errors: parseResult.error.format(),
     });
-    throw new UnrecoverableError(`Invalid payload: ${parseResult.error.message}`);
+    throw new UnrecoverableError(
+      `Invalid payload: ${parseResult.error.message}`,
+    );
   }
 
   const payload = parseResult.data;

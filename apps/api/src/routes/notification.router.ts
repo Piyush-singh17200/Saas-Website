@@ -1,4 +1,9 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import {
+  Router,
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import {
   NotificationListQuerySchema,
   createSuccessResponse,
@@ -59,7 +64,10 @@ notificationRouter.get(
       const orgId = getParam(req.params.organizationId);
       const userId = (req as any).user.id;
 
-      const unreadCount = await notificationService.getUnreadCount(orgId, userId);
+      const unreadCount = await notificationService.getUnreadCount(
+        orgId,
+        userId,
+      );
       res.status(200).json(createSuccessResponse({ unreadCount }, req.id));
     } catch (err) {
       next(err);
@@ -80,7 +88,11 @@ notificationRouter.patch(
       const notifId = getParam(req.params.notificationId);
       const userId = (req as any).user.id;
 
-      const updated = await notificationService.markAsRead(orgId, userId, notifId);
+      const updated = await notificationService.markAsRead(
+        orgId,
+        userId,
+        notifId,
+      );
       if (!updated) {
         throw new AppError("Notification not found", 404, ErrorCode.NOT_FOUND);
       }

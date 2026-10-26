@@ -79,6 +79,45 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((val) => val === "true"),
+  // Storage & Object Storage Configuration
+  STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
+  STORAGE_LOCAL_DIR: z.string().default("./uploads"),
+  STORAGE_S3_BUCKET: z.string().default("workspace-attachments"),
+  STORAGE_S3_REGION: z.string().default("us-east-1"),
+  STORAGE_S3_ENDPOINT: z.string().optional(),
+  STORAGE_S3_ACCESS_KEY_ID: z.string().optional(),
+  STORAGE_S3_SECRET_ACCESS_KEY: z.string().optional(),
+  STORAGE_S3_FORCE_PATH_STYLE: z
+    .string()
+    .default("true")
+    .transform((val) => val === "true"),
+  STORAGE_MAX_FILE_SIZE_BYTES: z
+    .string()
+    .default("10485760")
+    .transform((val) => parseInt(val, 10)),
+  STORAGE_SIGNED_URL_EXPIRES_SECONDS: z
+    .string()
+    .default("900")
+    .transform((val) => parseInt(val, 10)),
+  ALLOW_LOCAL_WEBHOOKS: z
+    .string()
+    .default("false")
+    .transform((val) => val === "true"),
+  // Enterprise Security & MFA Configuration
+  MFA_ENCRYPTION_KEY: z
+    .string()
+    .default("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+    .refine(
+      (key) => {
+        const isHex = /^[0-9a-fA-F]{64}$/.test(key);
+        const isUtf8 = Buffer.from(key, "utf8").length === 32;
+        return isHex || isUtf8;
+      },
+      {
+        message:
+          "MFA_ENCRYPTION_KEY must be 32 bytes (64 hex characters or 32 UTF-8 characters)",
+      },
+    ),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -92,6 +131,30 @@ function validateEnv(): Env {
     console.error(`[FATAL] Configuration validation failed: ${issues}`);
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
+
+  // Production-specific security and configuration constraints
+  if (parsed.data.NODE_ENV === "production") {
+    if (
+      parsed.data.MFA_ENCRYPTION_KEY ===
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    ) {
+      throw new Error(
+        "Production deployment requires a unique, securely generated MFA_ENCRYPTION_KEY. Default development key is forbidden in production.",
+      );
+    }
+
+    if (parsed.data.STORAGE_PROVIDER === "s3") {
+      if (
+        !parsed.data.STORAGE_S3_ACCESS_KEY_ID ||
+        !parsed.data.STORAGE_S3_SECRET_ACCESS_KEY
+      ) {
+        throw new Error(
+          "When STORAGE_PROVIDER is set to 's3' in production, STORAGE_S3_ACCESS_KEY_ID and STORAGE_S3_SECRET_ACCESS_KEY are required.",
+        );
+      }
+    }
+  }
+
   return parsed.data;
 }
 

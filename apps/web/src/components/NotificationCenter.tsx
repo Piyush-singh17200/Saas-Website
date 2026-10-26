@@ -23,9 +23,13 @@ interface NotificationCenterProps {
   organizationId: string;
 }
 
-export function NotificationCenter({ organizationId }: NotificationCenterProps) {
+export function NotificationCenter({
+  organizationId,
+}: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
+  const [notifications, setNotifications] = useState<NotificationResponse[]>(
+    [],
+  );
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,11 +73,15 @@ export function NotificationCenter({ organizationId }: NotificationCenterProps) 
     try {
       setIsLoading(true);
       setError(null);
-      const res = await apiClient.getNotifications(organizationId, { limit: 20 });
+      const res = await apiClient.getNotifications(organizationId, {
+        limit: 20,
+      });
       setNotifications(res.notifications);
       setUnreadCount(res.unreadCount);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load notifications");
+      setError(
+        err instanceof Error ? err.message : "Failed to load notifications",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +110,10 @@ export function NotificationCenter({ organizationId }: NotificationCenterProps) 
   // Close on outside click or Escape key
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -130,7 +141,9 @@ export function NotificationCenter({ organizationId }: NotificationCenterProps) 
     try {
       await apiClient.markNotificationAsRead(organizationId, id);
       setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
+        prev.map((n) =>
+          n.id === id ? { ...n, readAt: new Date().toISOString() } : n,
+        ),
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch {
@@ -144,7 +157,10 @@ export function NotificationCenter({ organizationId }: NotificationCenterProps) 
       setIsMarkingAll(true);
       await apiClient.markAllNotificationsAsRead(organizationId);
       setNotifications((prev) =>
-        prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })),
+        prev.map((n) => ({
+          ...n,
+          readAt: n.readAt || new Date().toISOString(),
+        })),
       );
       setUnreadCount(0);
     } catch {
@@ -195,7 +211,9 @@ export function NotificationCenter({ organizationId }: NotificationCenterProps) 
           {/* Header */}
           <div className="p-3.5 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/60">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-white">Notifications</span>
+              <span className="text-sm font-semibold text-white">
+                Notifications
+              </span>
               {unreadCount > 0 && (
                 <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
                   {unreadCount} unread
@@ -246,7 +264,9 @@ export function NotificationCenter({ organizationId }: NotificationCenterProps) 
                 <div className="w-10 h-10 rounded-full bg-slate-800/50 flex items-center justify-center text-slate-500 mb-3">
                   <BellOff className="w-5 h-5" />
                 </div>
-                <p className="text-sm font-medium text-slate-300">All caught up!</p>
+                <p className="text-sm font-medium text-slate-300">
+                  All caught up!
+                </p>
                 <p className="text-xs text-slate-500 mt-1 max-w-[200px]">
                   You have no notifications in this organization.
                 </p>
@@ -254,13 +274,16 @@ export function NotificationCenter({ organizationId }: NotificationCenterProps) 
             ) : (
               notifications.map((notif) => {
                 const isUnread = !notif.readAt;
-                const metadata = notif.metadata as Record<string, string> | null;
+                const metadata = notif.metadata as Record<
+                  string,
+                  string
+                > | null;
                 const targetPath =
                   metadata?.projectId && metadata?.taskId
                     ? `/organizations/${organizationId}/projects/${metadata.projectId}`
                     : metadata?.projectId
-                    ? `/organizations/${organizationId}/projects/${metadata.projectId}`
-                    : null;
+                      ? `/organizations/${organizationId}/projects/${metadata.projectId}`
+                      : null;
 
                 return (
                   <div
@@ -277,7 +300,9 @@ export function NotificationCenter({ organizationId }: NotificationCenterProps) 
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
-                        <p className={`text-xs font-medium truncate ${isUnread ? "text-white font-semibold" : "text-slate-300"}`}>
+                        <p
+                          className={`text-xs font-medium truncate ${isUnread ? "text-white font-semibold" : "text-slate-300"}`}
+                        >
                           {notif.title}
                         </p>
                         <span className="text-[10px] text-slate-500 whitespace-nowrap shrink-0">

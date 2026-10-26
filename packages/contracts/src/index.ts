@@ -176,8 +176,52 @@ export const UserProfileSchema = z.object({
   displayName: z.string(),
   status: z.enum(["ACTIVE", "DISABLED"]),
   createdAt: z.string(),
+  mfaEnabled: z.boolean().optional().default(false),
+  emailVerified: z.boolean().optional().default(false),
 });
 export type UserProfile = z.infer<typeof UserProfileSchema>;
+
+export const ForgotPasswordInputSchema = z.object({
+  email: z
+    .string()
+    .email("Invalid email address")
+    .max(255)
+    .transform((val) => val.trim().toLowerCase()),
+});
+export type ForgotPasswordInput = z.infer<typeof ForgotPasswordInputSchema>;
+
+export const ResetPasswordInputSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  newPassword: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(100, "Password must not exceed 100 characters"),
+});
+export type ResetPasswordInput = z.infer<typeof ResetPasswordInputSchema>;
+
+export const VerifyEmailInputSchema = z.object({
+  token: z.string().min(1, "Verification token is required"),
+});
+export type VerifyEmailInput = z.infer<typeof VerifyEmailInputSchema>;
+
+export const ResendVerificationInputSchema = z.object({
+  email: z
+    .string()
+    .email("Invalid email address")
+    .max(255)
+    .transform((val) => val.trim().toLowerCase()),
+});
+export type ResendVerificationInput = z.infer<
+  typeof ResendVerificationInputSchema
+>;
+
+export const DeleteAccountInputSchema = z.object({
+  password: z.string().min(1, "Password is required for account deletion"),
+  confirmationPhrase: z.string().refine((val) => val === "DELETE MY ACCOUNT", {
+    message: 'Confirmation phrase must match "DELETE MY ACCOUNT"',
+  }),
+});
+export type DeleteAccountInput = z.infer<typeof DeleteAccountInputSchema>;
 
 // -----------------------------------------------------------------------------
 // Organization Schemas
@@ -279,9 +323,39 @@ export const InvitationResponseSchema = z.object({
       displayName: z.string(),
     })
     .optional(),
+  token: z.string().optional(),
 });
 export type InvitationResponse = z.infer<typeof InvitationResponseSchema>;
 
+export const PublicInvitationDetailsSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
+  expiresAt: z.string(),
+  isExpired: z.boolean(),
+  organization: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    slug: z.string(),
+  }),
+  inviter: z.object({
+    displayName: z.string(),
+  }),
+});
+export type PublicInvitationDetails = z.infer<
+  typeof PublicInvitationDetailsSchema
+>;
+
+export const AcceptInvitationResultSchema = z.object({
+  organizationId: z.string().uuid(),
+  organizationName: z.string(),
+  organizationSlug: z.string(),
+  role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
+  message: z.string(),
+});
+export type AcceptInvitationResult = z.infer<
+  typeof AcceptInvitationResultSchema
+>;
 
 // -----------------------------------------------------------------------------
 // Pagination Envelope
@@ -352,6 +426,51 @@ export const ProjectQuerySchema = z.object({
 export type ProjectQuery = z.infer<typeof ProjectQuerySchema>;
 
 // -----------------------------------------------------------------------------
+// Tag Schemas
+// -----------------------------------------------------------------------------
+export const TagResponseSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  name: z.string(),
+  color: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
+});
+export type TagResponse = z.infer<typeof TagResponseSchema>;
+
+export const CreateTagInputSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Tag name is required")
+    .max(50, "Tag name cannot exceed 50 characters"),
+  color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Color must be a valid 6-character hex code")
+    .default("#3B82F6"),
+});
+export type CreateTagInput = z.infer<typeof CreateTagInputSchema>;
+
+export const UpdateTagInputSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Tag name is required")
+    .max(50, "Tag name cannot exceed 50 characters")
+    .optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Color must be a valid 6-character hex code")
+    .optional(),
+});
+export type UpdateTagInput = z.infer<typeof UpdateTagInputSchema>;
+
+export const AssignTagsInputSchema = z.object({
+  tagIds: z.array(z.string().uuid()).min(1, "At least one tag ID is required"),
+});
+export type AssignTagsInput = z.infer<typeof AssignTagsInputSchema>;
+
+// -----------------------------------------------------------------------------
 // Task Schemas
 // -----------------------------------------------------------------------------
 export const UserPreviewSchema = z.object({
@@ -373,6 +492,7 @@ export const CreateTaskInputSchema = z.object({
   assigneeId: z.string().uuid().optional().nullable(),
   dueDate: z.string().datetime().optional().nullable(),
   position: z.number().optional(),
+  tagIds: z.array(z.string().uuid()).optional(),
 });
 export type CreateTaskInput = z.infer<typeof CreateTaskInputSchema>;
 
@@ -389,6 +509,7 @@ export const UpdateTaskInputSchema = z.object({
   assigneeId: z.string().uuid().optional().nullable(),
   dueDate: z.string().datetime().optional().nullable(),
   position: z.number().optional(),
+  tagIds: z.array(z.string().uuid()).optional(),
   version: z
     .number()
     .int()
@@ -426,6 +547,7 @@ export const TaskResponseSchema = z.object({
   assigneeId: z.string().uuid().nullable().optional(),
   createdById: z.string().uuid(),
   dueDate: z.string().nullable().optional(),
+  isOverdue: z.boolean().optional(),
   position: z.number(),
   version: z.number(),
   createdAt: z.string(),
@@ -434,6 +556,7 @@ export const TaskResponseSchema = z.object({
   assignee: UserPreviewSchema.nullable().optional(),
   createdBy: UserPreviewSchema.optional(),
   commentCount: z.number().optional(),
+  tags: z.array(TagResponseSchema).optional().default([]),
 });
 export type TaskResponse = z.infer<typeof TaskResponseSchema>;
 
@@ -441,15 +564,42 @@ export const TaskQuerySchema = z.object({
   status: z.enum(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   assigneeId: z.string().optional(),
+  tagIds: z.preprocess((val) => {
+    if (!val) return undefined;
+    if (Array.isArray(val)) return val;
+    if (typeof val === "string") {
+      if (val.includes(","))
+        return val
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      return [val.trim()];
+    }
+    return val;
+  }, z.array(z.string().uuid()).optional()),
+  isOverdue: z.preprocess((val) => {
+    if (val === undefined || val === null || val === "") return undefined;
+    if (val === "true" || val === true) return true;
+    if (val === "false" || val === false) return false;
+    return val;
+  }, z.boolean().optional()),
   dueDateFrom: z.string().optional(),
   dueDateTo: z.string().optional(),
   search: z.string().optional(),
   sortBy: z
-    .enum(["position", "createdAt", "dueDate", "priority"])
+    .enum([
+      "position",
+      "createdAt",
+      "updatedAt",
+      "dueDate",
+      "priority",
+      "title",
+    ])
     .default("position"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  projectId: z.string().uuid().optional(),
 });
 export type TaskQuery = z.infer<typeof TaskQuerySchema>;
 
@@ -663,7 +813,6 @@ export type NotificationListResponse = z.infer<
   typeof NotificationListResponseSchema
 >;
 
-
 // -----------------------------------------------------------------------------
 // Background Jobs & Queue Schemas
 // -----------------------------------------------------------------------------
@@ -672,6 +821,7 @@ export const QueueName = {
   INVITATION_EXPIRY: "invitation-expiry",
   BILLING_RECONCILIATION: "billing-reconciliation",
   MAINTENANCE: "maintenance",
+  WEBHOOKS: "webhooks",
 } as const;
 export type QueueNameValue = (typeof QueueName)[keyof typeof QueueName];
 
@@ -751,3 +901,417 @@ export const WorkerMetricsResponseSchema = z.object({
 });
 export type WorkerMetricsResponse = z.infer<typeof WorkerMetricsResponseSchema>;
 
+// -----------------------------------------------------------------------------
+// Attachment & Storage Schemas
+// -----------------------------------------------------------------------------
+export const AttachmentStatus = {
+  PENDING: "PENDING",
+  READY: "READY",
+  FAILED: "FAILED",
+} as const;
+export type AttachmentStatusType =
+  (typeof AttachmentStatus)[keyof typeof AttachmentStatus];
+
+export const AttachmentResponseSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  uploaderId: z.string().uuid(),
+  uploader: z
+    .object({
+      id: z.string().uuid(),
+      displayName: z.string(),
+      email: z.string().email(),
+    })
+    .optional(),
+  projectId: z.string().uuid().nullable().optional(),
+  taskId: z.string().uuid().nullable().optional(),
+  fileName: z.string(),
+  storageKey: z.string(),
+  mimeType: z.string(),
+  fileSize: z.number().int(),
+  status: z.enum(["PENDING", "READY", "FAILED"]),
+  downloadUrl: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type AttachmentResponse = z.infer<typeof AttachmentResponseSchema>;
+
+export const PresignUploadInputSchema = z.object({
+  fileName: z.string().min(1, "Filename is required").max(255),
+  mimeType: z.string().min(1, "MIME type is required"),
+  fileSize: z.number().int().positive("File size must be positive"),
+  taskId: z.string().uuid("Task ID must be a valid UUID").optional(),
+  projectId: z.string().uuid("Project ID must be a valid UUID").optional(),
+});
+export type PresignUploadInput = z.infer<typeof PresignUploadInputSchema>;
+
+export const PresignUploadResponseSchema = z.object({
+  attachment: AttachmentResponseSchema,
+  uploadUrl: z.string(),
+  storageKey: z.string(),
+  fields: z.record(z.string()).optional(),
+  expiresInSeconds: z.number(),
+});
+export type PresignUploadResponse = z.infer<typeof PresignUploadResponseSchema>;
+
+export const ConfirmUploadInputSchema = z.object({
+  storageKey: z.string().optional(),
+});
+export type ConfirmUploadInput = z.infer<typeof ConfirmUploadInputSchema>;
+
+export const AttachmentListQuerySchema = z.object({
+  taskId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
+  status: z.enum(["PENDING", "READY", "FAILED"]).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type AttachmentListQuery = z.infer<typeof AttachmentListQuerySchema>;
+
+// -----------------------------------------------------------------------------
+// Developer Platform & Webhook Schemas
+// -----------------------------------------------------------------------------
+
+export const ApiKeyScope = {
+  ALL: "*",
+  PROJECTS_READ: "projects:read",
+  PROJECTS_WRITE: "projects:write",
+  TASKS_READ: "tasks:read",
+  TASKS_WRITE: "tasks:write",
+  WEBHOOKS_READ: "webhooks:read",
+  WEBHOOKS_WRITE: "webhooks:write",
+} as const;
+export type ApiKeyScopeType = (typeof ApiKeyScope)[keyof typeof ApiKeyScope];
+
+export const WebhookEventType = {
+  TASK_CREATED: "task.created",
+  TASK_UPDATED: "task.updated",
+  TASK_DELETED: "task.deleted",
+  PROJECT_CREATED: "project.created",
+  PROJECT_UPDATED: "project.updated",
+  PROJECT_DELETED: "project.deleted",
+  PING: "ping",
+} as const;
+export type WebhookEventTypeValue =
+  (typeof WebhookEventType)[keyof typeof WebhookEventType];
+
+export const WebhookDeliveryStatus = {
+  PENDING: "PENDING",
+  SUCCESS: "SUCCESS",
+  FAILED: "FAILED",
+} as const;
+export type WebhookDeliveryStatusType =
+  (typeof WebhookDeliveryStatus)[keyof typeof WebhookDeliveryStatus];
+
+// API Key Schemas
+export const CreateApiKeyInputSchema = z.object({
+  name: z.string().trim().min(1, "Key name is required").max(100),
+  scopes: z
+    .array(z.string().trim())
+    .min(1, "At least one permission scope is required"),
+  expiresInDays: z.number().int().min(1).max(365).optional(),
+});
+export type CreateApiKeyInput = z.infer<typeof CreateApiKeyInputSchema>;
+
+export const ApiKeyResponseSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  name: z.string(),
+  keyPrefix: z.string(),
+  scopes: z.array(z.string()),
+  expiresAt: z.string().nullable().optional(),
+  lastUsedAt: z.string().nullable().optional(),
+  revokedAt: z.string().nullable().optional(),
+  createdAt: z.string(),
+  createdBy: z
+    .object({
+      id: z.string().uuid(),
+      displayName: z.string(),
+      email: z.string(),
+    })
+    .optional(),
+});
+export type ApiKeyResponse = z.infer<typeof ApiKeyResponseSchema>;
+
+export const CreateApiKeyResultSchema = z.object({
+  apiKey: ApiKeyResponseSchema,
+  secret: z.string(),
+});
+export type CreateApiKeyResult = z.infer<typeof CreateApiKeyResultSchema>;
+
+export const ApiKeyListQuerySchema = z.object({
+  status: z.enum(["all", "active", "revoked"]).default("active"),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type ApiKeyListQuery = z.infer<typeof ApiKeyListQuerySchema>;
+
+// Webhook Subscription Schemas
+export const CreateWebhookSubscriptionInputSchema = z.object({
+  url: z.string().url("Valid URL is required").max(2048),
+  description: z.string().max(255).optional(),
+  eventTypes: z
+    .array(z.string().trim())
+    .min(1, "At least one event type must be selected"),
+});
+export type CreateWebhookSubscriptionInput = z.infer<
+  typeof CreateWebhookSubscriptionInputSchema
+>;
+
+export const UpdateWebhookSubscriptionInputSchema = z.object({
+  url: z.string().url("Valid URL is required").max(2048).optional(),
+  description: z.string().max(255).optional(),
+  eventTypes: z.array(z.string().trim()).min(1).optional(),
+  isActive: z.boolean().optional(),
+});
+export type UpdateWebhookSubscriptionInput = z.infer<
+  typeof UpdateWebhookSubscriptionInputSchema
+>;
+
+export const WebhookSubscriptionResponseSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  url: z.string(),
+  description: z.string().nullable().optional(),
+  eventTypes: z.array(z.string()),
+  isActive: z.boolean(),
+  consecutiveFailures: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  createdBy: z
+    .object({
+      id: z.string().uuid(),
+      displayName: z.string(),
+      email: z.string(),
+    })
+    .optional(),
+});
+export type WebhookSubscriptionResponse = z.infer<
+  typeof WebhookSubscriptionResponseSchema
+>;
+
+export const CreateWebhookSubscriptionResultSchema = z.object({
+  subscription: WebhookSubscriptionResponseSchema,
+  secret: z.string(),
+});
+export type CreateWebhookSubscriptionResult = z.infer<
+  typeof CreateWebhookSubscriptionResultSchema
+>;
+
+export const RotateWebhookSecretResultSchema = z.object({
+  subscription: WebhookSubscriptionResponseSchema,
+  secret: z.string(),
+});
+export type RotateWebhookSecretResult = z.infer<
+  typeof RotateWebhookSecretResultSchema
+>;
+
+// Webhook Event & Delivery Schemas
+export const WebhookEventEnvelopeSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  version: z.string().default("2026-10-11"),
+  createdAt: z.string(),
+  organizationId: z.string().uuid(),
+  resourceId: z.string(),
+  payload: z.record(z.unknown()),
+});
+export type WebhookEventEnvelope = z.infer<typeof WebhookEventEnvelopeSchema>;
+
+export const WebhookDeliveryResponseSchema = z.object({
+  id: z.string().uuid(),
+  subscriptionId: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  eventId: z.string(),
+  eventType: z.string(),
+  payload: z.record(z.unknown()),
+  status: z.enum(["PENDING", "SUCCESS", "FAILED"]),
+  statusCode: z.number().nullable().optional(),
+  attemptCount: z.number(),
+  durationMs: z.number().nullable().optional(),
+  errorMessage: z.string().nullable().optional(),
+  createdAt: z.string(),
+});
+export type WebhookDeliveryResponse = z.infer<
+  typeof WebhookDeliveryResponseSchema
+>;
+
+export const WebhookDeliveryListQuerySchema = z.object({
+  subscriptionId: z.string().uuid().optional(),
+  status: z.enum(["PENDING", "SUCCESS", "FAILED"]).optional(),
+  eventType: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+export type WebhookDeliveryListQuery = z.infer<
+  typeof WebhookDeliveryListQuerySchema
+>;
+
+export const WebhookDeliveryJobPayloadSchema = z.object({
+  deliveryId: z.string().uuid().optional(),
+  subscriptionId: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  event: WebhookEventEnvelopeSchema,
+  attempt: z.number().default(1),
+  correlationId: z.string().optional(),
+});
+export type WebhookDeliveryJobPayload = z.infer<
+  typeof WebhookDeliveryJobPayloadSchema
+>;
+
+// -----------------------------------------------------------------------------
+// Enterprise Security, MFA, Session Management & Audit Log Schemas
+// -----------------------------------------------------------------------------
+
+// Active User Session Schemas
+export const SessionResponseSchema = z.object({
+  id: z.string().uuid(),
+  createdAt: z.string(),
+  lastUsedAt: z.string().nullable().optional(),
+  expiresAt: z.string(),
+  userAgent: z.string().nullable().optional(),
+  ipAddress: z.string().nullable().optional(),
+  isCurrent: z.boolean().default(false),
+});
+export type SessionResponse = z.infer<typeof SessionResponseSchema>;
+
+export const SessionListResponseSchema = z.object({
+  sessions: z.array(SessionResponseSchema),
+});
+export type SessionListResponse = z.infer<typeof SessionListResponseSchema>;
+
+// MFA Setup & Configuration Schemas
+export const MfaSetupResponseSchema = z.object({
+  secret: z.string(),
+  qrCodeUri: z.string(),
+  manualKey: z.string(),
+  recoveryCodes: z.array(z.string()),
+});
+export type MfaSetupResponse = z.infer<typeof MfaSetupResponseSchema>;
+
+export const MfaEnableInputSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .length(6, "Verification code must be 6 digits")
+    .regex(/^\d+$/, "Verification code must be numeric"),
+});
+export type MfaEnableInput = z.infer<typeof MfaEnableInputSchema>;
+
+export const MfaDisableInputSchema = z.object({
+  password: z.string().min(1, "Current password is required to disable MFA"),
+  code: z
+    .string()
+    .trim()
+    .length(6, "Verification code must be 6 digits")
+    .regex(/^\d+$/, "Verification code must be numeric")
+    .optional(),
+});
+export type MfaDisableInput = z.infer<typeof MfaDisableInputSchema>;
+
+export const MfaRegenerateRecoveryCodesInputSchema = z.object({
+  password: z
+    .string()
+    .min(1, "Current password is required to regenerate recovery codes"),
+});
+export type MfaRegenerateRecoveryCodesInput = z.infer<
+  typeof MfaRegenerateRecoveryCodesInputSchema
+>;
+
+export const MfaRegenerateRecoveryCodesResponseSchema = z.object({
+  recoveryCodes: z.array(z.string()),
+});
+export type MfaRegenerateRecoveryCodesResponse = z.infer<
+  typeof MfaRegenerateRecoveryCodesResponseSchema
+>;
+
+// MFA Login Challenge Schemas
+export const LoginResultSchema = z.object({
+  mfaRequired: z.boolean(),
+  challengeToken: z.string().optional(),
+  user: UserProfileSchema.optional(),
+});
+export type LoginResult = z.infer<typeof LoginResultSchema>;
+
+export const MfaChallengeVerifyInputSchema = z.object({
+  challengeToken: z.string().min(1, "MFA challenge token is required"),
+  code: z
+    .string()
+    .trim()
+    .length(6, "Verification code must be 6 digits")
+    .regex(/^\d+$/, "Verification code must be numeric"),
+});
+export type MfaChallengeVerifyInput = z.infer<
+  typeof MfaChallengeVerifyInputSchema
+>;
+
+export const MfaChallengeRecoveryInputSchema = z.object({
+  challengeToken: z.string().min(1, "MFA challenge token is required"),
+  recoveryCode: z.string().trim().min(8, "Valid recovery code is required"),
+});
+export type MfaChallengeRecoveryInput = z.infer<
+  typeof MfaChallengeRecoveryInputSchema
+>;
+
+// Organization Security Policy Schemas
+export const OrganizationSecurityPolicyResponseSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  requireMfa: z.boolean(),
+  sessionMaxAgeMinutes: z.number().int().min(15).max(43200),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type OrganizationSecurityPolicyResponse = z.infer<
+  typeof OrganizationSecurityPolicyResponseSchema
+>;
+
+export const UpdateOrganizationSecurityPolicyInputSchema = z.object({
+  requireMfa: z.boolean().optional(),
+  sessionMaxAgeMinutes: z
+    .number()
+    .int()
+    .min(15, "Session max age must be at least 15 minutes")
+    .max(43200, "Session max age cannot exceed 30 days (43200 minutes)")
+    .optional(),
+});
+export type UpdateOrganizationSecurityPolicyInput = z.infer<
+  typeof UpdateOrganizationSecurityPolicyInputSchema
+>;
+
+// Security Audit Log Schemas
+export const AuditLogEventItemSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid().nullable().optional(),
+  actorId: z.string().uuid().nullable().optional(),
+  action: z.string(),
+  targetType: z.string().nullable().optional(),
+  targetId: z.string().nullable().optional(),
+  requestId: z.string().nullable().optional(),
+  outcome: z.string(),
+  ipAddress: z.string().nullable().optional(),
+  userAgent: z.string().nullable().optional(),
+  metadata: z.record(z.unknown()).nullable().optional(),
+  createdAt: z.string(),
+  actor: z
+    .object({
+      id: z.string().uuid(),
+      displayName: z.string(),
+      email: z.string(),
+    })
+    .nullable()
+    .optional(),
+});
+export type AuditLogEventItem = z.infer<typeof AuditLogEventItemSchema>;
+
+export const AuditLogListQuerySchema = z.object({
+  action: z.string().optional(),
+  outcome: z.enum(["SUCCESS", "FAILURE"]).optional(),
+  actorId: z.string().uuid().optional(),
+  targetType: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+});
+export type AuditLogListQuery = z.infer<typeof AuditLogListQuerySchema>;

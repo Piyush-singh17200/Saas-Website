@@ -13,10 +13,19 @@ import {
   type TaskResponse,
   type PaginatedResult,
   type TaskQuery,
+  WebhookEventType,
 } from "@workspace/contracts";
 import { AppError } from "../middleware/error-handler.js";
 import { recordActivity } from "./activity.service.js";
 import { notificationService } from "./notification.service.js";
+import { dispatchWebhookEvent } from "./webhook.service.js";
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUUID(str: string): boolean {
+  return UUID_REGEX.test(str);
+}
 
 /**
  * Validates that an assignee belongs to the target organization as an ACTIVE member.
@@ -91,7 +100,21 @@ function mapTaskResponse(t: {
   assignee?: { id: string; email: string; displayName: string } | null;
   createdBy?: { id: string; email: string; displayName: string };
   _count?: { comments: number };
+  taskTags?: Array<{
+    tag: {
+      id: string;
+      organizationId: string;
+      name: string;
+      color: string;
+      createdAt: Date;
+      updatedAt?: Date;
+    };
+  }>;
 }): TaskResponse {
+  const isOverdue = Boolean(
+    t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "DONE",
+  );
+
   return {
     id: t.id,
     organizationId: t.organizationId,
@@ -103,6 +126,7 @@ function mapTaskResponse(t: {
     assigneeId: t.assigneeId,
     createdById: t.createdById,
     dueDate: t.dueDate?.toISOString() || null,
+    isOverdue,
     position: t.position,
     version: t.version,
     createdAt: t.createdAt.toISOString(),
@@ -123,6 +147,16 @@ function mapTaskResponse(t: {
         }
       : undefined,
     commentCount: t._count?.comments,
+    tags: t.taskTags
+      ? t.taskTags.map((tt) => ({
+          id: tt.tag.id,
+          organizationId: tt.tag.organizationId,
+          name: tt.tag.name,
+          color: tt.tag.color,
+          createdAt: tt.tag.createdAt.toISOString(),
+          updatedAt: tt.tag.updatedAt?.toISOString(),
+        }))
+      : [],
   };
 }
 
@@ -141,7 +175,25 @@ export async function createTask(
     await validateAssigneeInOrg(organizationId, input.assigneeId);
   }
 
-  return withTenantTransaction(organizationId, async (tx) => {
+  // Validate tag ownership if tagIds provided
+  if (input.tagIds && input.tagIds.length > 0) {
+    const validTags = await prisma.tag.findMany({
+      where: {
+        id: { in: input.tagIds },
+        organizationId,
+      },
+    });
+
+    if (validTags.length !== input.tagIds.length) {
+      throw new AppError(
+        "One or more tags do not exist or belong to a different organization.",
+        400,
+        ErrorCode.BAD_REQUEST,
+      );
+    }
+  }
+
+  const result = await withTenantTransaction(organizationId, async (tx) => {
     // Determine position: place at end if position is not specified
     let position = input.position;
     if (position === undefined) {
@@ -169,6 +221,16 @@ export async function createTask(
         position,
         version: 1,
         completedAt,
+        ...(input.tagIds && input.tagIds.length > 0
+          ? {
+              taskTags: {
+                create: input.tagIds.map((tagId) => ({
+                  organizationId,
+                  tagId,
+                })),
+              },
+            }
+          : {}),
       },
       include: {
         assignee: {
@@ -179,6 +241,11 @@ export async function createTask(
         },
         _count: {
           select: { comments: true },
+        },
+        taskTags: {
+          include: {
+            tag: true,
+          },
         },
       },
     });
@@ -212,6 +279,22 @@ export async function createTask(
 
     return mapTaskResponse(task);
   });
+
+  dispatchWebhookEvent(
+    organizationId,
+    WebhookEventType.TASK_CREATED,
+    result.id,
+    {
+      id: result.id,
+      title: result.title,
+      status: result.status,
+      priority: result.priority,
+      projectId: result.projectId,
+      dueDate: result.dueDate,
+    },
+  ).catch(() => {});
+
+  return result;
 }
 
 /**
@@ -236,33 +319,79 @@ export async function listTasks(
         ? { assigneeId: null }
         : { assigneeId: query.assigneeId }
       : {}),
-    ...(query.dueDateFrom || query.dueDateTo
+    ...(query.tagIds && query.tagIds.length > 0
       ? {
-          dueDate: {
-            ...(query.dueDateFrom ? { gte: new Date(query.dueDateFrom) } : {}),
-            ...(query.dueDateTo ? { lte: new Date(query.dueDateTo) } : {}),
+          taskTags: {
+            some: {
+              tagId: { in: query.tagIds },
+            },
           },
-        }
-      : {}),
-    ...(query.search
-      ? {
-          OR: [
-            { title: { contains: query.search, mode: "insensitive" } },
-            { description: { contains: query.search, mode: "insensitive" } },
-          ],
         }
       : {}),
   };
 
-  const orderBy = {
-    [query.sortBy || "position"]: query.sortOrder || "asc",
-  };
+  // Due date & overdue filtering
+  const now = new Date();
+  if (query.isOverdue === true) {
+    where.dueDate = {
+      ...(query.dueDateFrom ? { gte: new Date(query.dueDateFrom) } : {}),
+      lt: now,
+      not: null,
+    };
+    // Completed tasks are never overdue
+    if (!query.status) {
+      where.status = { not: "DONE" };
+    } else if (query.status === "DONE") {
+      where.status = { in: [] };
+    }
+  } else if (query.isOverdue === false) {
+    where.OR = [
+      { dueDate: null },
+      { dueDate: { gte: now } },
+      { status: "DONE" },
+    ];
+    if (query.dueDateFrom || query.dueDateTo) {
+      where.dueDate = {
+        ...(query.dueDateFrom ? { gte: new Date(query.dueDateFrom) } : {}),
+        ...(query.dueDateTo ? { lte: new Date(query.dueDateTo) } : {}),
+      };
+    }
+  } else if (query.dueDateFrom || query.dueDateTo) {
+    where.dueDate = {
+      ...(query.dueDateFrom ? { gte: new Date(query.dueDateFrom) } : {}),
+      ...(query.dueDateTo ? { lte: new Date(query.dueDateTo) } : {}),
+    };
+  }
+
+  // Safe search query matching title, description, or id (if uuid)
+  const trimmedSearch = query.search?.trim();
+  if (trimmedSearch) {
+    const searchConditions: Prisma.TaskWhereInput[] = [
+      { title: { contains: trimmedSearch, mode: "insensitive" } },
+      { description: { contains: trimmedSearch, mode: "insensitive" } },
+    ];
+    if (isValidUUID(trimmedSearch)) {
+      searchConditions.push({ id: trimmedSearch });
+    }
+
+    if (where.OR) {
+      where.AND = [{ OR: where.OR }, { OR: searchConditions }];
+      delete where.OR;
+    } else {
+      where.OR = searchConditions;
+    }
+  }
+
+  // Deterministic sorting with allowlisted fields and stable tie-breaker
+  const sortBy = query.sortBy || "position";
+  const sortOrder = query.sortOrder || "asc";
+  const orderBy = [{ [sortBy]: sortOrder }, { id: "asc" as const }];
 
   const [total, tasks] = await Promise.all([
     prisma.task.count({ where }),
     prisma.task.findMany({
       where,
-      orderBy: [orderBy, { id: "asc" }], // deterministic tie-breaker
+      orderBy,
       skip,
       take: limit,
       include: {
@@ -274,6 +403,11 @@ export async function listTasks(
         },
         _count: {
           select: { comments: true },
+        },
+        taskTags: {
+          include: {
+            tag: true,
+          },
         },
       },
     }),
@@ -312,6 +446,11 @@ export async function getTaskById(
       _count: {
         select: { comments: true },
       },
+      taskTags: {
+        include: {
+          tag: true,
+        },
+      },
     },
   });
 
@@ -339,7 +478,25 @@ export async function updateTask(
     await validateAssigneeInOrg(organizationId, input.assigneeId);
   }
 
-  return withTenantTransaction(organizationId, async (tx) => {
+  // Validate tag ownership if tagIds provided
+  if (input.tagIds !== undefined && input.tagIds.length > 0) {
+    const validTags = await prisma.tag.findMany({
+      where: {
+        id: { in: input.tagIds },
+        organizationId,
+      },
+    });
+
+    if (validTags.length !== input.tagIds.length) {
+      throw new AppError(
+        "One or more tags do not exist or belong to a different organization.",
+        400,
+        ErrorCode.BAD_REQUEST,
+      );
+    }
+  }
+
+  const result = await withTenantTransaction(organizationId, async (tx) => {
     // Verify task exists and retrieve current state
     const currentTask = await tx.task.findFirst({
       where: { id: taskId, projectId, organizationId },
@@ -409,6 +566,22 @@ export async function updateTask(
       );
     }
 
+    // Synchronize tags if tagIds was explicitly provided
+    if (input.tagIds !== undefined) {
+      await tx.taskTag.deleteMany({
+        where: { taskId, organizationId },
+      });
+      if (input.tagIds.length > 0) {
+        await tx.taskTag.createMany({
+          data: input.tagIds.map((tagId) => ({
+            organizationId,
+            taskId,
+            tagId,
+          })),
+        });
+      }
+    }
+
     // Fetch updated task with relations
     const updated = await tx.task.findUniqueOrThrow({
       where: { id: taskId },
@@ -421,6 +594,11 @@ export async function updateTask(
         },
         _count: {
           select: { comments: true },
+        },
+        taskTags: {
+          include: {
+            tag: true,
+          },
         },
       },
     });
@@ -470,6 +648,22 @@ export async function updateTask(
 
     return mapTaskResponse(updated);
   });
+
+  dispatchWebhookEvent(
+    organizationId,
+    WebhookEventType.TASK_UPDATED,
+    result.id,
+    {
+      id: result.id,
+      title: result.title,
+      status: result.status,
+      priority: result.priority,
+      projectId: result.projectId,
+      dueDate: result.dueDate,
+    },
+  ).catch(() => {});
+
+  return result;
 }
 
 /**
@@ -555,4 +749,10 @@ export async function deleteTask(
       },
     });
   });
+
+  dispatchWebhookEvent(organizationId, WebhookEventType.TASK_DELETED, taskId, {
+    id: taskId,
+    projectId,
+    title: existing.title,
+  }).catch(() => {});
 }

@@ -3,6 +3,8 @@ import { prisma } from "@workspace/database";
 import {
   type InvitationResponse,
   type CreateInvitationInput,
+  type PublicInvitationDetails,
+  type AcceptInvitationResult,
   NotificationType,
   ErrorCode,
 } from "@workspace/contracts";
@@ -184,6 +186,7 @@ export class InvitationService {
         acceptedAt: null,
         revokedAt: null,
         inviter: invitation.inviter,
+        token: rawToken,
       };
     });
   }
@@ -352,6 +355,225 @@ export class InvitationService {
         acceptedAt: null,
         revokedAt: null,
         inviter: updated.inviter,
+        token: rawToken,
+      };
+    });
+  }
+
+  /**
+   * Retrieves public details of an invitation by its raw token.
+   * Does not require authentication, but validates token and expiration.
+   */
+  public async getInvitationByToken(
+    rawToken: string,
+  ): Promise<PublicInvitationDetails> {
+    if (
+      !rawToken ||
+      typeof rawToken !== "string" ||
+      rawToken.trim().length < 16
+    ) {
+      throw new AppError("Invalid invitation token", 404, ErrorCode.NOT_FOUND);
+    }
+    const tokenHash = createHash("sha256")
+      .update(rawToken.trim())
+      .digest("hex");
+    const invite = await prisma.invitation.findUnique({
+      where: { tokenHash },
+      include: {
+        organization: {
+          select: { id: true, name: true, slug: true },
+        },
+        inviter: {
+          select: { displayName: true },
+        },
+      },
+    });
+
+    if (!invite) {
+      throw new AppError("Invitation not found", 404, ErrorCode.NOT_FOUND);
+    }
+
+    if (invite.revokedAt) {
+      throw new AppError(
+        "This invitation has been revoked",
+        400,
+        ErrorCode.BAD_REQUEST,
+      );
+    }
+
+    if (invite.acceptedAt) {
+      throw new AppError(
+        "This invitation has already been accepted",
+        400,
+        ErrorCode.BAD_REQUEST,
+      );
+    }
+
+    const isExpired = invite.expiresAt.getTime() <= Date.now();
+    if (isExpired) {
+      throw new AppError(
+        "This invitation has expired",
+        400,
+        ErrorCode.BAD_REQUEST,
+      );
+    }
+
+    return {
+      id: invite.id,
+      email: invite.email,
+      role: invite.role,
+      expiresAt: invite.expiresAt.toISOString(),
+      isExpired,
+      organization: invite.organization,
+      inviter: {
+        displayName: invite.inviter.displayName,
+      },
+    };
+  }
+
+  /**
+   * Accepts an invitation using a raw token.
+   * Requires an authenticated user whose email matches the invitation recipient.
+   * Enforces seat limits and tenant isolation atomically.
+   */
+  public async acceptInvitation(
+    rawToken: string,
+    user: { id: string; email: string; displayName: string },
+    requestId?: string,
+  ): Promise<AcceptInvitationResult> {
+    if (
+      !rawToken ||
+      typeof rawToken !== "string" ||
+      rawToken.trim().length < 16
+    ) {
+      throw new AppError("Invalid invitation token", 404, ErrorCode.NOT_FOUND);
+    }
+    const tokenHash = createHash("sha256")
+      .update(rawToken.trim())
+      .digest("hex");
+
+    return prisma.$transaction(async (tx) => {
+      const invite = await tx.invitation.findUnique({
+        where: { tokenHash },
+        include: {
+          organization: {
+            select: { id: true, name: true, slug: true },
+          },
+        },
+      });
+
+      if (!invite) {
+        throw new AppError("Invitation not found", 404, ErrorCode.NOT_FOUND);
+      }
+
+      if (invite.revokedAt) {
+        throw new AppError(
+          "This invitation has been revoked",
+          400,
+          ErrorCode.BAD_REQUEST,
+        );
+      }
+
+      if (invite.acceptedAt) {
+        throw new AppError(
+          "This invitation has already been accepted",
+          400,
+          ErrorCode.BAD_REQUEST,
+        );
+      }
+
+      if (invite.expiresAt.getTime() <= Date.now()) {
+        throw new AppError(
+          "This invitation has expired",
+          400,
+          ErrorCode.BAD_REQUEST,
+        );
+      }
+
+      // Verify authenticated user's email matches the invited email
+      if (
+        user.email.trim().toLowerCase() !== invite.email.trim().toLowerCase()
+      ) {
+        throw new AppError(
+          `This invitation was sent to ${invite.email}. You are currently signed in as ${user.email}. Please switch accounts to accept this invitation.`,
+          403,
+          ErrorCode.FORBIDDEN,
+        );
+      }
+
+      // Check if user is already a member
+      const existingMember = await tx.membership.findFirst({
+        where: {
+          organizationId: invite.organizationId,
+          userId: user.id,
+        },
+      });
+
+      if (existingMember) {
+        // Mark invitation accepted to resolve pending state
+        await tx.invitation.update({
+          where: { id: invite.id },
+          data: { acceptedAt: new Date() },
+        });
+
+        return {
+          organizationId: invite.organizationId,
+          organizationName: invite.organization.name,
+          organizationSlug: invite.organization.slug,
+          role: existingMember.role,
+          message: "You are already a member of this organization",
+        };
+      }
+
+      // Enforce seat entitlement limits
+      await assertCanAddMember(invite.organizationId, tx);
+
+      // Create active membership
+      await tx.membership.create({
+        data: {
+          organizationId: invite.organizationId,
+          userId: user.id,
+          role: invite.role,
+          status: "ACTIVE",
+          joinedAt: new Date(),
+        },
+      });
+
+      // Mark invitation accepted
+      await tx.invitation.update({
+        where: { id: invite.id },
+        data: { acceptedAt: new Date() },
+      });
+
+      // Record audit log
+      await recordAuditLog({
+        tx,
+        organizationId: invite.organizationId,
+        actorId: user.id,
+        action: "INVITATION_ACCEPTED",
+        targetType: "Invitation",
+        targetId: invite.id,
+        requestId,
+        metadata: {
+          email: invite.email,
+          role: invite.role,
+          userId: user.id,
+        },
+      });
+
+      logger.info("Organization invitation accepted", {
+        organizationId: invite.organizationId,
+        invitationId: invite.id,
+        userId: user.id,
+        role: invite.role,
+      });
+
+      return {
+        organizationId: invite.organizationId,
+        organizationName: invite.organization.name,
+        organizationSlug: invite.organization.slug,
+        role: invite.role,
+        message: "Invitation accepted successfully",
       };
     });
   }

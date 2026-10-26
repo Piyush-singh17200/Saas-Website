@@ -54,6 +54,38 @@ export async function requireActiveMembership(
     }
 
     req.membership = membership;
+
+    // Enforce organization security policy (MFA enforcement and session age)
+    const policy = await prisma.organizationSecurityPolicy.findUnique({
+      where: { organizationId },
+    });
+
+    if (policy) {
+      if (policy.requireMfa && !user.mfaEnabled) {
+        return next(
+          new AppError(
+            "Multi-Factor Authentication (MFA) is required by this organization. Please enroll in MFA in your account settings before accessing organization resources.",
+            403,
+            ErrorCode.FORBIDDEN,
+          ),
+        );
+      }
+
+      if (req.session && policy.sessionMaxAgeMinutes) {
+        const maxAgeMs = policy.sessionMaxAgeMinutes * 60 * 1000;
+        const sessionAge = Date.now() - req.session.createdAt.getTime();
+        if (sessionAge > maxAgeMs) {
+          return next(
+            new AppError(
+              "Your session duration exceeds this organization's maximum allowed session age. Please log in again.",
+              401,
+              ErrorCode.UNAUTHORIZED,
+            ),
+          );
+        }
+      }
+    }
+
     next();
   } catch (err) {
     next(err);

@@ -6,10 +6,12 @@ import {
   type ProjectResponse,
   type PaginatedResult,
   type ProjectQuery,
+  WebhookEventType,
 } from "@workspace/contracts";
 import { AppError } from "../middleware/error-handler.js";
 import { recordActivity } from "./activity.service.js";
 import { assertCanCreateActiveProject } from "./entitlement.service.js";
+import { dispatchWebhookEvent } from "./webhook.service.js";
 
 /**
  * Normalizes a name string into an alphanumeric hyphenated slug.
@@ -59,7 +61,7 @@ export async function createProject(
     );
   }
 
-  return withTenantTransaction(organizationId, async (tx) => {
+  const result = await withTenantTransaction(organizationId, async (tx) => {
     // Atomically enforce plan limits on active projects
     await assertCanCreateActiveProject(organizationId, tx);
 
@@ -100,6 +102,20 @@ export async function createProject(
       taskCount: 0,
     };
   });
+
+  dispatchWebhookEvent(
+    organizationId,
+    WebhookEventType.PROJECT_CREATED,
+    result.id,
+    {
+      id: result.id,
+      name: result.name,
+      slug: result.slug,
+      status: result.status,
+    },
+  ).catch(() => {});
+
+  return result;
 }
 
 /**
@@ -228,7 +244,7 @@ export async function updateProject(
     );
   }
 
-  return withTenantTransaction(organizationId, async (tx) => {
+  const result = await withTenantTransaction(organizationId, async (tx) => {
     const updated = await tx.project.update({
       where: { id: projectId },
       data: {
@@ -269,6 +285,20 @@ export async function updateProject(
       taskCount: updated._count.tasks,
     };
   });
+
+  dispatchWebhookEvent(
+    organizationId,
+    WebhookEventType.PROJECT_UPDATED,
+    result.id,
+    {
+      id: result.id,
+      name: result.name,
+      slug: result.slug,
+      status: result.status,
+    },
+  ).catch(() => {});
+
+  return result;
 }
 
 /**
@@ -298,7 +328,7 @@ export async function archiveProject(
     );
   }
 
-  return withTenantTransaction(organizationId, async (tx) => {
+  const result = await withTenantTransaction(organizationId, async (tx) => {
     const updated = await tx.project.update({
       where: { id: projectId },
       data: {
@@ -337,6 +367,18 @@ export async function archiveProject(
       taskCount: updated._count.tasks,
     };
   });
+
+  dispatchWebhookEvent(
+    organizationId,
+    WebhookEventType.PROJECT_DELETED,
+    projectId,
+    {
+      id: projectId,
+      status: "ARCHIVED",
+    },
+  ).catch(() => {});
+
+  return result;
 }
 
 /**

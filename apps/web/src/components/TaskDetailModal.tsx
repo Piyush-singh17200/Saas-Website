@@ -14,13 +14,18 @@ import {
   AlertTriangle,
   CheckCircle2,
   Loader2,
+  Paperclip,
+  Tag as TagIcon,
+  Plus,
 } from "lucide-react";
 import type {
   TaskResponse,
   CommentResponse,
   ActivityLogResponse,
+  TagResponse,
 } from "@workspace/contracts";
 import { apiClient } from "../lib/api-client";
+import { TaskAttachments } from "./TaskAttachments";
 
 interface TaskDetailModalProps {
   isOpen: boolean;
@@ -29,7 +34,9 @@ interface TaskDetailModalProps {
   organizationId: string;
   projectId: string;
   currentUserId?: string;
+  availableTags?: TagResponse[];
   onEditTask: (task: TaskResponse) => void;
+  onTaskUpdated?: (task: TaskResponse) => void;
 }
 
 export function TaskDetailModal({
@@ -39,11 +46,14 @@ export function TaskDetailModal({
   organizationId,
   projectId,
   currentUserId,
+  availableTags = [],
   onEditTask,
+  onTaskUpdated,
 }: TaskDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<"comments" | "activity">(
-    "comments",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "comments" | "attachments" | "activity"
+  >("comments");
+  const [attachmentCount, setAttachmentCount] = useState<number>(0);
   const [comments, setComments] = useState<CommentResponse[]>([]);
   const [activities, setActivities] = useState<ActivityLogResponse[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
@@ -58,6 +68,10 @@ export function TaskDetailModal({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
   const [isEditingComment, setIsEditingComment] = useState(false);
+
+  // Tag interactions
+  const [isTagLoading, setIsTagLoading] = useState(false);
+  const [isAddTagOpen, setIsAddTagOpen] = useState(false);
 
   const fetchComments = useCallback(async () => {
     if (!task) return;
@@ -98,6 +112,16 @@ export function TaskDetailModal({
       fetchActivities();
     }
   }, [isOpen, task, fetchComments, fetchActivities]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen || !task) return null;
 
@@ -181,6 +205,48 @@ export function TaskDetailModal({
       const msg =
         err instanceof Error ? err.message : "Failed to delete comment";
       setCommentError(msg);
+    }
+  };
+
+  const handleRemoveTag = async (tagId: string) => {
+    if (!task) return;
+    try {
+      setIsTagLoading(true);
+      await apiClient.removeTagFromTask(
+        organizationId,
+        projectId,
+        task.id,
+        tagId,
+      );
+      const updatedTags = (task.tags || []).filter((t) => t.id !== tagId);
+      const updatedTask = { ...task, tags: updatedTags };
+      if (onTaskUpdated) onTaskUpdated(updatedTask);
+    } catch {
+      // silently handle
+    } finally {
+      setIsTagLoading(false);
+    }
+  };
+
+  const handleAddTag = async (tagId: string) => {
+    if (!task) return;
+    try {
+      setIsTagLoading(true);
+      setIsAddTagOpen(false);
+      const res = await apiClient.assignTagsToTask(
+        organizationId,
+        projectId,
+        task.id,
+        {
+          tagIds: [tagId],
+        },
+      );
+      const updatedTask = { ...task, tags: res.tags };
+      if (onTaskUpdated) onTaskUpdated(updatedTask);
+    } catch {
+      // silently handle
+    } finally {
+      setIsTagLoading(false);
     }
   };
 
@@ -310,6 +376,77 @@ export function TaskDetailModal({
           </div>
         </div>
 
+        {/* Tags Bar */}
+        <div className="mb-4 shrink-0 flex items-center flex-wrap gap-2">
+          <span className="text-xs text-slate-500 font-medium flex items-center gap-1 mr-1">
+            <TagIcon className="w-3.5 h-3.5 text-slate-400" />
+            Tags:
+          </span>
+          {(task.tags || []).map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border"
+              style={{
+                backgroundColor: `${tag.color}20`,
+                borderColor: `${tag.color}50`,
+                color: tag.color,
+              }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: tag.color }}
+              />
+              <span>{tag.name}</span>
+              <button
+                type="button"
+                onClick={() => handleRemoveTag(tag.id)}
+                disabled={isTagLoading}
+                className="hover:opacity-80 transition-opacity p-0.5 text-slate-400 hover:text-white"
+                title={`Remove ${tag.name}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+
+          {/* Add Tag Dropdown */}
+          {availableTags.filter(
+            (at) => !task.tags?.some((tt) => tt.id === at.id),
+          ).length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsAddTagOpen((prev) => !prev)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Add Tag</span>
+              </button>
+
+              {isAddTagOpen && (
+                <div className="absolute left-0 mt-1.5 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1 z-50">
+                  {availableTags
+                    .filter((at) => !task.tags?.some((tt) => tt.id === at.id))
+                    .map((at) => (
+                      <button
+                        key={at.id}
+                        type="button"
+                        onClick={() => handleAddTag(at.id)}
+                        className="w-full text-left px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2"
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: at.color }}
+                        />
+                        <span>{at.name}</span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Task Description */}
         <div className="mb-4 shrink-0">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
@@ -339,6 +476,21 @@ export function TaskDetailModal({
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Comments ({comments.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("attachments")}
+            className={`pb-2 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+              activeTab === "attachments"
+                ? "border-emerald-500 text-emerald-400"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Paperclip className="w-3.5 h-3.5" />
+            <span>
+              Attachments {attachmentCount > 0 ? `(${attachmentCount})` : ""}
+            </span>
           </button>
 
           <button
@@ -482,6 +634,14 @@ export function TaskDetailModal({
                 </div>
               )}
             </div>
+          ) : activeTab === "attachments" ? (
+            <TaskAttachments
+              organizationId={organizationId}
+              projectId={projectId}
+              taskId={task.id}
+              currentUserId={currentUserId}
+              onAttachmentCountChange={setAttachmentCount}
+            />
           ) : (
             /* Activity History tab */
             <div>

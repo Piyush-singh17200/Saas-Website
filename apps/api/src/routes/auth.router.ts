@@ -7,6 +7,11 @@ import {
 import {
   RegisterInputSchema,
   LoginInputSchema,
+  ForgotPasswordInputSchema,
+  ResetPasswordInputSchema,
+  VerifyEmailInputSchema,
+  ResendVerificationInputSchema,
+  DeleteAccountInputSchema,
   createSuccessResponse,
   ErrorCode,
   type UserProfile,
@@ -22,6 +27,21 @@ import { requireAuthenticatedUser } from "../middleware/auth.middleware.js";
 import { authRateLimiter } from "../middleware/rate-limit.middleware.js";
 import { AppError } from "../middleware/error-handler.js";
 import { env } from "../config/env.js";
+import {
+  requestPasswordReset,
+  confirmPasswordReset,
+} from "../services/password-reset.service.js";
+import {
+  sendEmailVerification,
+  confirmEmailVerification,
+  resendVerificationEmail,
+} from "../services/email-verification.service.js";
+import { deleteUserAccount } from "../services/account-deletion.service.js";
+import { createMfaChallenge } from "../services/mfa.service.js";
+import {
+  recordAuditLog,
+  SecurityAuditAction,
+} from "../services/audit.service.js";
 
 export const authRouter: Router = Router();
 
@@ -34,6 +54,8 @@ function toUserProfile(user: {
   displayName: string;
   status: "ACTIVE" | "DISABLED";
   createdAt: Date;
+  mfaEnabled?: boolean;
+  emailVerified?: boolean;
 }): UserProfile {
   return {
     id: user.id,
@@ -41,6 +63,8 @@ function toUserProfile(user: {
     displayName: user.displayName,
     status: user.status,
     createdAt: user.createdAt.toISOString(),
+    mfaEnabled: user.mfaEnabled ?? false,
+    emailVerified: user.emailVerified ?? false,
   };
 }
 
@@ -85,14 +109,43 @@ authRouter.post(
         },
       });
 
-      const { rawToken } = await createSession(user.id);
+      const userAgent = req.headers["user-agent"];
+      const ipAddress = req.ip || req.socket.remoteAddress;
+
+      const { rawToken } = await createSession(user.id, {
+        userAgent,
+        ipAddress,
+      });
 
       // Set session token in secure HttpOnly cookie (never return raw token in JSON)
       res.cookie(env.SESSION_COOKIE_NAME, rawToken, getSessionCookieOptions());
 
+      // Send initial email verification link asynchronously
+      void sendEmailVerification(user.id, user.email, {
+        ipAddress,
+        userAgent,
+        requestId: req.id,
+      }).catch(() => {});
+
+      await recordAuditLog({
+        actorId: user.id,
+        action: SecurityAuditAction.AUTH_LOGIN_SUCCESS,
+        targetType: "user",
+        targetId: user.id,
+        outcome: "SUCCESS",
+        ipAddress,
+        userAgent,
+        metadata: { method: "registration" },
+      });
+
       res
         .status(201)
-        .json(createSuccessResponse({ user: toUserProfile(user) }, req.id));
+        .json(
+          createSuccessResponse(
+            { user: toUserProfile(user), mfaRequired: false },
+            req.id,
+          ),
+        );
     } catch (err) {
       next(err);
     }
@@ -117,11 +170,21 @@ authRouter.post(
       }
 
       const { email, password } = parsed.data;
+      const userAgent = req.headers["user-agent"];
+      const ipAddress = req.ip || req.socket.remoteAddress;
 
       const user = await prisma.user.findUnique({ where: { email } });
 
       // Generic authentication failure prevents user enumeration
       if (!user) {
+        await recordAuditLog({
+          action: SecurityAuditAction.AUTH_LOGIN_FAILURE,
+          targetType: "user",
+          outcome: "FAILURE",
+          ipAddress,
+          userAgent,
+          metadata: { reason: "user_not_found" },
+        });
         throw new AppError(
           "Invalid email or password",
           401,
@@ -131,6 +194,16 @@ authRouter.post(
 
       const isValidPassword = await verifyPassword(password, user.passwordHash);
       if (!isValidPassword) {
+        await recordAuditLog({
+          actorId: user.id,
+          action: SecurityAuditAction.AUTH_LOGIN_FAILURE,
+          targetType: "user",
+          targetId: user.id,
+          outcome: "FAILURE",
+          ipAddress,
+          userAgent,
+          metadata: { reason: "invalid_password" },
+        });
         throw new AppError(
           "Invalid email or password",
           401,
@@ -146,14 +219,60 @@ authRouter.post(
         );
       }
 
-      const { rawToken } = await createSession(user.id);
+      // Check if MFA is required for this user
+      if (user.mfaEnabled) {
+        const challengeToken = await createMfaChallenge(user.id);
+
+        await recordAuditLog({
+          actorId: user.id,
+          action: SecurityAuditAction.AUTH_LOGIN_SUCCESS,
+          targetType: "user",
+          targetId: user.id,
+          outcome: "SUCCESS",
+          ipAddress,
+          userAgent,
+          metadata: { mfaChallengeIssued: true },
+        });
+
+        // Do not set session cookie when MFA second factor challenge is required
+        res.status(200).json(
+          createSuccessResponse(
+            {
+              mfaRequired: true,
+              challengeToken,
+            },
+            req.id,
+          ),
+        );
+        return;
+      }
+
+      const { rawToken } = await createSession(user.id, {
+        userAgent,
+        ipAddress,
+      });
 
       // Rotate/set session cookie
       res.cookie(env.SESSION_COOKIE_NAME, rawToken, getSessionCookieOptions());
 
+      await recordAuditLog({
+        actorId: user.id,
+        action: SecurityAuditAction.AUTH_LOGIN_SUCCESS,
+        targetType: "user",
+        targetId: user.id,
+        outcome: "SUCCESS",
+        ipAddress,
+        userAgent,
+      });
+
       res
         .status(200)
-        .json(createSuccessResponse({ user: toUserProfile(user) }, req.id));
+        .json(
+          createSuccessResponse(
+            { user: toUserProfile(user), mfaRequired: false },
+            req.id,
+          ),
+        );
     } catch (err) {
       next(err);
     }
@@ -206,5 +325,190 @@ authRouter.get(
     res
       .status(200)
       .json(createSuccessResponse({ user: toUserProfile(user) }, req.id));
+  },
+);
+
+/**
+ * POST /api/v1/auth/forgot-password
+ */
+authRouter.post(
+  "/forgot-password",
+  authRateLimiter,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = ForgotPasswordInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(
+          parsed.error.issues[0]?.message || "Invalid email address",
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers["user-agent"];
+
+      const result = await requestPasswordReset(parsed.data.email, {
+        ipAddress,
+        userAgent,
+        requestId: req.id,
+      });
+
+      res.status(200).json(createSuccessResponse(result, req.id));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * POST /api/v1/auth/reset-password
+ */
+authRouter.post(
+  "/reset-password",
+  authRateLimiter,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = ResetPasswordInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(
+          parsed.error.issues[0]?.message || "Invalid password reset input",
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers["user-agent"];
+
+      const result = await confirmPasswordReset(
+        parsed.data.token,
+        parsed.data.newPassword,
+        {
+          ipAddress,
+          userAgent,
+          requestId: req.id,
+        },
+      );
+
+      // Clear any session cookie since all sessions were revoked
+      res.clearCookie(env.SESSION_COOKIE_NAME, {
+        path: "/",
+        httpOnly: true,
+      });
+
+      res.status(200).json(createSuccessResponse(result, req.id));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * POST /api/v1/auth/verify-email
+ */
+authRouter.post(
+  "/verify-email",
+  authRateLimiter,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = VerifyEmailInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(
+          parsed.error.issues[0]?.message || "Verification token is required",
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers["user-agent"];
+
+      const result = await confirmEmailVerification(parsed.data.token, {
+        ipAddress,
+        userAgent,
+        requestId: req.id,
+      });
+
+      res.status(200).json(createSuccessResponse(result, req.id));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * POST /api/v1/auth/resend-verification
+ */
+authRouter.post(
+  "/resend-verification",
+  authRateLimiter,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = ResendVerificationInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(
+          parsed.error.issues[0]?.message || "Invalid email address",
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers["user-agent"];
+
+      const result = await resendVerificationEmail(parsed.data.email, {
+        ipAddress,
+        userAgent,
+        requestId: req.id,
+      });
+
+      res.status(200).json(createSuccessResponse(result, req.id));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * DELETE /api/v1/auth/account
+ */
+authRouter.delete(
+  "/account",
+  requireAuthenticatedUser,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = req.user!;
+      const parsed = DeleteAccountInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(
+          parsed.error.issues[0]?.message || "Invalid account deletion confirmation",
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers["user-agent"];
+
+      const result = await deleteUserAccount({
+        userId: user.id,
+        password: parsed.data.password,
+        confirmationPhrase: parsed.data.confirmationPhrase,
+        ipAddress,
+        userAgent,
+        requestId: req.id,
+      });
+
+      // Clear session cookie immediately
+      res.clearCookie(env.SESSION_COOKIE_NAME, {
+        path: "/",
+        httpOnly: true,
+      });
+
+      res.status(200).json(createSuccessResponse(result, req.id));
+    } catch (err) {
+      next(err);
+    }
   },
 );

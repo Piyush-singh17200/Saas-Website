@@ -1,5 +1,4 @@
 import { Redis } from "ioredis";
-import RedisMock from "ioredis-mock";
 import { logger } from "./logger.js";
 
 let redisClient: Redis | null = null;
@@ -11,10 +10,15 @@ export function getWorkerRedisClient(): Redis {
   }
 
   const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
-  const useMock = process.env.USE_REDIS_MOCK === "true" || (process.env.NODE_ENV === "test" && !process.env.USE_REAL_REDIS);
+  const useMock =
+    process.env.USE_REDIS_MOCK === "true" ||
+    (process.env.NODE_ENV === "test" && !process.env.USE_REAL_REDIS);
 
   if (useMock) {
-    logger.info("Initializing in-memory Redis client mock for background worker");
+    logger.info(
+      "Initializing in-memory Redis client mock for background worker",
+    );
+    const RedisMock = require("ioredis-mock") as typeof import("ioredis-mock").default;
     redisClient = new RedisMock() as unknown as Redis;
     isConnected = true;
     return redisClient;
@@ -26,7 +30,9 @@ export function getWorkerRedisClient(): Redis {
     lazyConnect: true,
     retryStrategy(times: number) {
       if (times > 10) {
-        logger.warn("Worker Redis retry threshold exceeded", { attempts: times });
+        logger.warn("Worker Redis retry threshold exceeded", {
+          attempts: times,
+        });
         return null;
       }
       return Math.min(times * 100, 3000);
@@ -92,7 +98,8 @@ export async function checkWorkerRedisConnection(): Promise<WorkerRedisHealthRes
     return {
       ok: false,
       latencyMs: Date.now() - start,
-      error: err instanceof Error ? err.message : "Worker Redis connection failed",
+      error:
+        err instanceof Error ? err.message : "Worker Redis connection failed",
     };
   }
 }

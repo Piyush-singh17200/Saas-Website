@@ -24,10 +24,14 @@ export interface EmailProvider {
  * Formats, logs, and retains sent messages in a bounded in-memory buffer for verification.
  */
 export class DevelopmentEmailProvider implements EmailProvider {
-  private sentMessages: Array<SendEmailOptions & { messageId: string; timestamp: string }> = [];
+  private sentMessages: Array<
+    SendEmailOptions & { messageId: string; timestamp: string }
+  > = [];
   private maxBufferSize = 200;
 
-  public async sendEmail(options: SendEmailOptions): Promise<EmailDeliveryResult> {
+  public async sendEmail(
+    options: SendEmailOptions,
+  ): Promise<EmailDeliveryResult> {
     const messageId = `dev-mail-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const timestamp = new Date().toISOString();
 
@@ -55,7 +59,9 @@ export class DevelopmentEmailProvider implements EmailProvider {
     };
   }
 
-  public getSentMessages(): ReadonlyArray<SendEmailOptions & { messageId: string; timestamp: string }> {
+  public getSentMessages(): ReadonlyArray<
+    SendEmailOptions & { messageId: string; timestamp: string }
+  > {
     return this.sentMessages;
   }
 

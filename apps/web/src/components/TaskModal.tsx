@@ -7,6 +7,7 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   MembershipResponse,
+  TagResponse,
 } from "@workspace/contracts";
 import { ConflictBanner } from "./ConflictBanner";
 
@@ -16,6 +17,7 @@ interface TaskModalProps {
   onSubmit: (data: CreateTaskInput | UpdateTaskInput) => Promise<void>;
   initialTask?: TaskResponse | null;
   members: MembershipResponse[];
+  availableTags?: TagResponse[];
   onReloadTask?: (taskId: string) => Promise<TaskResponse | null>;
 }
 
@@ -25,6 +27,7 @@ export function TaskModal({
   onSubmit,
   initialTask,
   members,
+  availableTags = [],
   onReloadTask,
 }: TaskModalProps) {
   const [title, setTitle] = useState(initialTask?.title || "");
@@ -44,6 +47,9 @@ export function TaskModal({
     initialTask?.dueDate
       ? new Date(initialTask.dueDate).toISOString().slice(0, 10)
       : "",
+  );
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(
+    initialTask?.tags?.map((t) => t.id) || [],
   );
   const [version, setVersion] = useState<number>(initialTask?.version || 1);
 
@@ -65,6 +71,7 @@ export function TaskModal({
           : "",
       );
       setVersion(initialTask.version);
+      setSelectedTagIds(initialTask.tags?.map((t) => t.id) || []);
       setHasConflict(false);
       setError(null);
     } else {
@@ -74,11 +81,22 @@ export function TaskModal({
       setPriority("MEDIUM");
       setAssigneeId("");
       setDueDate("");
+      setSelectedTagIds([]);
       setVersion(1);
       setHasConflict(false);
       setError(null);
     }
   }, [initialTask, isOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen && !isSubmitting) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, isSubmitting, onClose]);
 
   if (!isOpen) return null;
 
@@ -98,6 +116,7 @@ export function TaskModal({
             ? new Date(updated.dueDate).toISOString().slice(0, 10)
             : "",
         );
+        setSelectedTagIds(updated.tags?.map((t) => t.id) || []);
         setVersion(updated.version);
         setHasConflict(false);
         setError(null);
@@ -130,6 +149,7 @@ export function TaskModal({
           priority,
           assigneeId: assigneeId ? assigneeId : null,
           dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+          tagIds: selectedTagIds,
           version,
         };
         await onSubmit(updatePayload);
@@ -141,6 +161,7 @@ export function TaskModal({
           priority,
           assigneeId: assigneeId ? assigneeId : null,
           dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+          tagIds: selectedTagIds,
         };
         await onSubmit(createPayload);
       }
@@ -297,6 +318,52 @@ export function TaskModal({
               />
             </div>
           </div>
+
+          {availableTags && availableTags.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                Tags & Labels
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {availableTags.map((tag) => {
+                  const isSelected = selectedTagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTagIds((prev) =>
+                          isSelected
+                            ? prev.filter((id) => id !== tag.id)
+                            : [...prev, tag.id],
+                        );
+                      }}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                        isSelected
+                          ? "ring-1 ring-white/40 shadow-sm"
+                          : "opacity-60 hover:opacity-100"
+                      }`}
+                      style={{
+                        backgroundColor: isSelected
+                          ? `${tag.color}33`
+                          : "rgba(15, 23, 42, 0.6)",
+                        borderColor: isSelected
+                          ? tag.color
+                          : "rgba(51, 65, 85, 0.6)",
+                        color: isSelected ? tag.color : "#94a3b8",
+                      }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <span>{tag.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">

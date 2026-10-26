@@ -1,5 +1,4 @@
 import { Redis } from "ioredis";
-import RedisMock from "ioredis-mock";
 import { env } from "../config/env.js";
 import { logger } from "./logger.js";
 
@@ -11,10 +10,15 @@ export function getRedisClient(): Redis {
     return redisClient;
   }
 
-  const useMock = env.USE_REDIS_MOCK || (env.NODE_ENV === "test" && !process.env.USE_REAL_REDIS);
+  const useMock =
+    env.USE_REDIS_MOCK ||
+    (env.NODE_ENV === "test" && !process.env.USE_REAL_REDIS);
 
   if (useMock) {
-    logger.info("Initializing in-memory Redis client mock for testing/development");
+    logger.info(
+      "Initializing in-memory Redis client mock for testing/development",
+    );
+    const RedisMock = require("ioredis-mock") as typeof import("ioredis-mock").default;
     redisClient = new RedisMock() as unknown as Redis;
     isConnected = true;
     return redisClient;
@@ -26,7 +30,9 @@ export function getRedisClient(): Redis {
     lazyConnect: true,
     retryStrategy(times: number) {
       if (times > 10) {
-        logger.warn("Redis retry attempts exceeded threshold", { attempts: times });
+        logger.warn("Redis retry attempts exceeded threshold", {
+          attempts: times,
+        });
         return null;
       }
       return Math.min(times * 100, 3000);
@@ -67,7 +73,11 @@ export function getRedisClient(): Redis {
   // Attempt non-blocking initial connect
   client.connect().catch((err) => {
     isConnected = false;
-    logger.warn("Initial Redis connection failed; operating with fallback policies", {}, err);
+    logger.warn(
+      "Initial Redis connection failed; operating with fallback policies",
+      {},
+      err,
+    );
   });
 
   redisClient = client;

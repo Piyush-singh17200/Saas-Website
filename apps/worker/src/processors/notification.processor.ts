@@ -1,10 +1,15 @@
 import { type Job, UnrecoverableError } from "bullmq";
-import { NotificationJobPayloadSchema, type NotificationJobPayload } from "@workspace/contracts";
+import {
+  NotificationJobPayloadSchema,
+  type NotificationJobPayload,
+} from "@workspace/contracts";
 import { withTenantTransaction, prisma } from "@workspace/database";
 import { logger } from "../lib/logger.js";
 import { emailProvider } from "../services/email.service.js";
 
-export async function processNotificationJob(job: Job<NotificationJobPayload>): Promise<Record<string, unknown>> {
+export async function processNotificationJob(
+  job: Job<NotificationJobPayload>,
+): Promise<Record<string, unknown>> {
   const startTime = Date.now();
   logger.info("Processing notification job", {
     jobId: job.id,
@@ -21,7 +26,9 @@ export async function processNotificationJob(job: Job<NotificationJobPayload>): 
       errors: parseResult.error.format(),
     });
     // Throw UnrecoverableError so BullMQ does not retry invalid payloads indefinitely
-    throw new UnrecoverableError(`Invalid payload: ${parseResult.error.message}`);
+    throw new UnrecoverableError(
+      `Invalid payload: ${parseResult.error.message}`,
+    );
   }
 
   const payload = parseResult.data;
@@ -52,11 +59,14 @@ export async function processNotificationJob(job: Job<NotificationJobPayload>): 
     });
 
     if (!membership) {
-      logger.warn("Permanent failure: Recipient is not a member of target organization", {
-        jobId: job.id,
-        organizationId: payload.organizationId,
-        recipientUserId: payload.recipientUserId,
-      });
+      logger.warn(
+        "Permanent failure: Recipient is not a member of target organization",
+        {
+          jobId: job.id,
+          organizationId: payload.organizationId,
+          recipientUserId: payload.recipientUserId,
+        },
+      );
       // Do not deliver private tenant data to non-members
       return { status: "rejected", reason: "recipient_not_member" };
     }
@@ -73,11 +83,14 @@ export async function processNotificationJob(job: Job<NotificationJobPayload>): 
     });
 
     if (existing) {
-      logger.info("Notification job skipped due to existing idempotency record", {
-        jobId: job.id,
-        notificationId: existing.id,
-        idempotencyKey: payload.idempotencyKey,
-      });
+      logger.info(
+        "Notification job skipped due to existing idempotency record",
+        {
+          jobId: job.id,
+          notificationId: existing.id,
+          idempotencyKey: payload.idempotencyKey,
+        },
+      );
       return { status: "idempotent_skip", notificationId: existing.id };
     }
 

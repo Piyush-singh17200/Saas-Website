@@ -19,7 +19,10 @@ export class BoundedLruStore {
     this.store = new Map();
   }
 
-  public increment(key: string, windowMs: number): { totalHits: number; resetTime: Date } {
+  public increment(
+    key: string,
+    windowMs: number,
+  ): { totalHits: number; resetTime: Date } {
     const now = Date.now();
     let entry = this.store.get(key);
 
@@ -66,6 +69,11 @@ export function getClientIp(req: Request): string {
  * Generates identity key based on authenticated user or validated client IP.
  */
 function getRateLimitKey(req: Request, prefix: string): string {
+  // If API key is authenticated on the request, scope by API key ID
+  const apiKey = (req as any).apiKey;
+  if (apiKey?.id) {
+    return `${prefix}:key:${apiKey.id}`;
+  }
   // If user is authenticated on the request, scope by user ID
   const userId = (req as any).user?.id;
   if (userId) {
@@ -77,7 +85,11 @@ function getRateLimitKey(req: Request, prefix: string): string {
 /**
  * Creates standard 429 response payload
  */
-function sendRateLimitResponse(req: Request, res: Response, message = "Too many requests. Please try again later."): void {
+function sendRateLimitResponse(
+  req: Request,
+  res: Response,
+  message = "Too many requests. Please try again later.",
+): void {
   const requestId = req.id || "unknown";
   res.status(429).json(
     createErrorResponse(
@@ -99,7 +111,8 @@ function sendServiceUnavailableResponse(req: Request, res: Response): void {
     createErrorResponse(
       {
         code: ErrorCode.SERVICE_UNAVAILABLE,
-        message: "Rate limiting service is unavailable. Sensitive operation rejected for security.",
+        message:
+          "Rate limiting service is unavailable. Sensitive operation rejected for security.",
       },
       requestId,
     ),
@@ -131,13 +144,18 @@ function createRateLimitStore(prefix: string) {
  * - Strict limits: 15 requests per 15 minutes (or 2000 during automated test runs)
  * - Fail-closed when Redis is unavailable to prevent brute-force attacks during outages
  */
-export function createAuthRateLimiter(customLimit?: number): RateLimitRequestHandler {
+export function createAuthRateLimiter(
+  customLimit?: number,
+): RateLimitRequestHandler {
   if (!env.RATE_LIMIT_ENABLED) {
-    return ((_req: Request, _res: Response, next: NextFunction) => next()) as RateLimitRequestHandler;
+    return ((_req: Request, _res: Response, next: NextFunction) =>
+      next()) as RateLimitRequestHandler;
   }
 
   const store = createRateLimitStore("auth");
-  const limit = customLimit ?? (env.NODE_ENV === "test" && !process.env.TEST_RATE_LIMIT ? 2000 : 15);
+  const limit =
+    customLimit ??
+    (env.NODE_ENV === "test" && !process.env.TEST_RATE_LIMIT ? 2000 : 15);
 
   return rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -148,8 +166,15 @@ export function createAuthRateLimiter(customLimit?: number): RateLimitRequestHan
     store,
     passOnStoreError: false,
     handler: (req, res) => {
-      logger.warn("Authentication rate limit exceeded", { ip: getClientIp(req), route: req.originalUrl });
-      sendRateLimitResponse(req, res, "Too many authentication attempts. Please try again later.");
+      logger.warn("Authentication rate limit exceeded", {
+        ip: getClientIp(req),
+        route: req.originalUrl,
+      });
+      sendRateLimitResponse(
+        req,
+        res,
+        "Too many authentication attempts. Please try again later.",
+      );
     },
   });
 }
@@ -159,13 +184,18 @@ export function createAuthRateLimiter(customLimit?: number): RateLimitRequestHan
  * - Limit: 30 requests per 15 minutes (or 2000 during automated test runs)
  * - Fail-closed on Redis failure
  */
-export function createAbuseRateLimiter(customLimit?: number): RateLimitRequestHandler {
+export function createAbuseRateLimiter(
+  customLimit?: number,
+): RateLimitRequestHandler {
   if (!env.RATE_LIMIT_ENABLED) {
-    return ((_req: Request, _res: Response, next: NextFunction) => next()) as RateLimitRequestHandler;
+    return ((_req: Request, _res: Response, next: NextFunction) =>
+      next()) as RateLimitRequestHandler;
   }
 
   const store = createRateLimitStore("abuse");
-  const limit = customLimit ?? (env.NODE_ENV === "test" && !process.env.TEST_RATE_LIMIT ? 2000 : 30);
+  const limit =
+    customLimit ??
+    (env.NODE_ENV === "test" && !process.env.TEST_RATE_LIMIT ? 2000 : 30);
 
   return rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -176,8 +206,15 @@ export function createAbuseRateLimiter(customLimit?: number): RateLimitRequestHa
     store,
     passOnStoreError: false,
     handler: (req, res) => {
-      logger.warn("Abuse-prone operation rate limit exceeded", { ip: getClientIp(req), route: req.originalUrl });
-      sendRateLimitResponse(req, res, "Too many requests for this operation. Please try again later.");
+      logger.warn("Abuse-prone operation rate limit exceeded", {
+        ip: getClientIp(req),
+        route: req.originalUrl,
+      });
+      sendRateLimitResponse(
+        req,
+        res,
+        "Too many requests for this operation. Please try again later.",
+      );
     },
   });
 }
@@ -187,13 +224,18 @@ export function createAbuseRateLimiter(customLimit?: number): RateLimitRequestHa
  * - Limit: 600 requests per 15 minutes per user/IP
  * - Bounded fallback when Redis is unavailable
  */
-export function createGeneralRateLimiter(customLimit?: number): RateLimitRequestHandler {
+export function createGeneralRateLimiter(
+  customLimit?: number,
+): RateLimitRequestHandler {
   if (!env.RATE_LIMIT_ENABLED) {
-    return ((_req: Request, _res: Response, next: NextFunction) => next()) as RateLimitRequestHandler;
+    return ((_req: Request, _res: Response, next: NextFunction) =>
+      next()) as RateLimitRequestHandler;
   }
 
   const store = createRateLimitStore("general");
-  const limit = customLimit ?? (env.NODE_ENV === "test" && !process.env.TEST_RATE_LIMIT ? 5000 : 600);
+  const limit =
+    customLimit ??
+    (env.NODE_ENV === "test" && !process.env.TEST_RATE_LIMIT ? 5000 : 600);
 
   return rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -213,16 +255,23 @@ export function createGeneralRateLimiter(customLimit?: number): RateLimitRequest
  * Middleware that guards high-risk routes by verifying Redis health
  * If Redis is disconnected, it immediately rejects the request with 503 (Fail-Closed).
  */
-export function failClosedGuard(req: Request, res: Response, next: NextFunction): void {
+export function failClosedGuard(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   if (!env.RATE_LIMIT_ENABLED) {
     return next();
   }
 
   if (!isRedisClientConnected()) {
-    logger.warn("High-risk route rejected because Redis is unavailable (Fail-Closed policy)", {
-      route: req.originalUrl,
-      ip: getClientIp(req),
-    });
+    logger.warn(
+      "High-risk route rejected because Redis is unavailable (Fail-Closed policy)",
+      {
+        route: req.originalUrl,
+        ip: getClientIp(req),
+      },
+    );
     return sendServiceUnavailableResponse(req, res);
   }
 
@@ -233,3 +282,39 @@ export const authRateLimiter = createAuthRateLimiter();
 export const abuseRateLimiter = createAbuseRateLimiter();
 export const generalRateLimiter = createGeneralRateLimiter();
 
+/**
+ * Rate Limiter for Developer API and Webhook endpoints
+ * - Standard limit: 1000 requests per 15 minutes per key/IP
+ */
+export function createDeveloperRateLimiter(
+  customLimit?: number,
+): RateLimitRequestHandler {
+  if (!env.RATE_LIMIT_ENABLED) {
+    return ((_req: Request, _res: Response, next: NextFunction) =>
+      next()) as RateLimitRequestHandler;
+  }
+
+  const store = createRateLimitStore("developer");
+  const limit =
+    customLimit ??
+    (env.NODE_ENV === "test" && !process.env.TEST_RATE_LIMIT ? 5000 : 1000);
+
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    keyGenerator: (req) => getRateLimitKey(req, "developer"),
+    store,
+    passOnStoreError: true,
+    handler: (req, res) => {
+      sendRateLimitResponse(
+        req,
+        res,
+        "Developer API rate limit exceeded. Please try again later.",
+      );
+    },
+  });
+}
+
+export const developerRateLimiter = createDeveloperRateLimiter();

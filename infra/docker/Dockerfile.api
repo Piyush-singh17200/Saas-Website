@@ -1,0 +1,74 @@
+# ==============================================================================
+# Production Dockerfile: Express API (@workspace/api)
+# Multi-stage build with non-root security context and health check
+# ==============================================================================
+
+FROM node:22-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@12.10.1 --activate
+WORKDIR /app
+
+# ------------------------------------------------------------------------------
+# 1. Dependency Resolution & Build Stage
+# ------------------------------------------------------------------------------
+FROM base AS builder
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages/config/package.json ./packages/config/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/database/package.json ./packages/database/
+COPY packages/test-utils/package.json ./packages/test-utils/
+COPY apps/api/package.json ./apps/api/
+
+RUN pnpm install --frozen-lockfile --filter @workspace/api... --filter @workspace/contracts --filter @workspace/database
+
+COPY packages/config/ ./packages/config/
+COPY packages/contracts/ ./packages/contracts/
+COPY packages/database/ ./packages/database/
+COPY packages/test-utils/ ./packages/test-utils/
+COPY apps/api/ ./apps/api/
+
+# Generate Prisma Client and build TypeScript packages
+RUN pnpm --filter @workspace/database build && \
+    pnpm --filter @workspace/contracts build && \
+    pnpm --filter @workspace/test-utils build && \
+    pnpm --filter @workspace/api build
+
+# Prune dev dependencies for production runtime
+RUN pnpm --filter @workspace/api --prod deploy /prod/api
+
+# pnpm deploy installs a fresh @prisma/client (postinstall cannot generate without
+# a schema), so generate the client into the deployed dependency tree.
+RUN mkdir -p /prod/api/prisma /prod/api/node_modules/@prisma && \
+    cp /app/packages/database/prisma/schema.prisma /prod/api/prisma/ && \
+    CLIENT_PKG=$(find /prod/api/node_modules/.pnpm -maxdepth 1 -type d -name '@prisma+client@*' | head -n 1)/node_modules/@prisma/client && \
+    ln -s "$CLIENT_PKG" /prod/api/node_modules/@prisma/client && \
+    cd /prod/api && \
+    /app/packages/database/node_modules/.bin/prisma generate --schema /prod/api/prisma/schema.prisma
+
+# ------------------------------------------------------------------------------
+# 2. Production Runner Stage
+# ------------------------------------------------------------------------------
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=4000
+
+# Install curl for container health check
+RUN apk add --no-cache curl
+
+# Security: Run as unprivileged node user (UID 1000)
+USER node
+
+COPY --chown=node:node --from=builder /prod/api ./
+COPY --chown=node:node --from=builder /app/apps/api/dist ./dist
+COPY --chown=node:node --from=builder /app/packages/database/prisma ./prisma
+
+EXPOSE 4000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:4000/api/v1/health || exit 1
+
+CMD ["node", "dist/server.js"]

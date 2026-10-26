@@ -1,0 +1,64 @@
+# ==============================================================================
+# Production Dockerfile: Background Worker (@workspace/worker)
+# Multi-stage build with non-root security context and graceful shutdown
+# ==============================================================================
+
+FROM node:22-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@12.10.1 --activate
+WORKDIR /app
+
+# ------------------------------------------------------------------------------
+# 1. Dependency Resolution & Build Stage
+# ------------------------------------------------------------------------------
+FROM base AS builder
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages/config/package.json ./packages/config/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/database/package.json ./packages/database/
+COPY packages/test-utils/package.json ./packages/test-utils/
+COPY apps/worker/package.json ./apps/worker/
+
+RUN pnpm install --frozen-lockfile --filter @workspace/worker... --filter @workspace/contracts --filter @workspace/database
+
+COPY packages/config/ ./packages/config/
+COPY packages/contracts/ ./packages/contracts/
+COPY packages/database/ ./packages/database/
+COPY packages/test-utils/ ./packages/test-utils/
+COPY apps/worker/ ./apps/worker/
+
+# Generate Prisma Client and build TypeScript packages
+RUN pnpm --filter @workspace/database build && \
+    pnpm --filter @workspace/contracts build && \
+    pnpm --filter @workspace/worker build
+
+# Prune dev dependencies for production runtime
+RUN pnpm --filter @workspace/worker --prod deploy /prod/worker
+
+# pnpm deploy installs a fresh @prisma/client (postinstall cannot generate without
+# a schema), so generate the client into the deployed dependency tree.
+RUN mkdir -p /prod/worker/prisma /prod/worker/node_modules/@prisma && \
+    cp /app/packages/database/prisma/schema.prisma /prod/worker/prisma/ && \
+    CLIENT_PKG=$(find /prod/worker/node_modules/.pnpm -maxdepth 1 -type d -name '@prisma+client@*' | head -n 1)/node_modules/@prisma/client && \
+    ln -s "$CLIENT_PKG" /prod/worker/node_modules/@prisma/client && \
+    cd /prod/worker && \
+    /app/packages/database/node_modules/.bin/prisma generate --schema /prod/worker/prisma/schema.prisma
+
+# ------------------------------------------------------------------------------
+# 2. Production Runner Stage
+# ------------------------------------------------------------------------------
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Security: Run as unprivileged node user (UID 1000)
+USER node
+
+COPY --chown=node:node --from=builder /prod/worker ./
+COPY --chown=node:node --from=builder /app/apps/worker/dist ./dist
+COPY --chown=node:node --from=builder /app/packages/database/prisma ./prisma
+
+CMD ["node", "dist/index.js"]

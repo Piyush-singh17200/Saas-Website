@@ -296,6 +296,45 @@ export async function removeMember(
     throw new AppError("Member not found", 404, ErrorCode.NOT_FOUND);
   }
 
+  // If not self-removal, check that actor has appropriate role over target
+  if (actorId !== targetUserId) {
+    const actorMembership = await prisma.membership.findUnique({
+      where: {
+        org_user_membership_unique: {
+          organizationId,
+          userId: actorId,
+        },
+      },
+    });
+
+    if (!actorMembership) {
+      throw new AppError(
+        "Actor is not a member of this organization",
+        403,
+        ErrorCode.FORBIDDEN,
+      );
+    }
+
+    if (actorMembership.role === "ADMIN") {
+      if (
+        targetMembership.role === "OWNER" ||
+        targetMembership.role === "ADMIN"
+      ) {
+        throw new AppError(
+          "Administrators cannot remove organization owners or other administrators",
+          403,
+          ErrorCode.FORBIDDEN,
+        );
+      }
+    } else if (actorMembership.role !== "OWNER") {
+      throw new AppError(
+        "Insufficient permissions to remove this member",
+        403,
+        ErrorCode.FORBIDDEN,
+      );
+    }
+  }
+
   // If removing an owner, verify there is at least one other active owner
   if (targetMembership.role === "OWNER") {
     const ownerCount = await prisma.membership.count({

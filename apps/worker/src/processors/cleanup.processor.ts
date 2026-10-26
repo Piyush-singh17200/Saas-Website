@@ -1,10 +1,15 @@
 import { type Job, Queue } from "bullmq";
-import { CleanupJobPayloadSchema, type CleanupJobPayload } from "@workspace/contracts";
+import {
+  CleanupJobPayloadSchema,
+  type CleanupJobPayload,
+} from "@workspace/contracts";
 import { withAdminBypassTransaction } from "@workspace/database";
 import { getWorkerRedisClient } from "../lib/redis.js";
 import { logger } from "../lib/logger.js";
 
-export async function processCleanupJob(job: Job<CleanupJobPayload>): Promise<Record<string, unknown>> {
+export async function processCleanupJob(
+  job: Job<CleanupJobPayload>,
+): Promise<Record<string, unknown>> {
   const startTime = Date.now();
   const parseResult = CleanupJobPayloadSchema.safeParse(job.data || {});
   const payload: CleanupJobPayload = parseResult.success
@@ -19,14 +24,21 @@ export async function processCleanupJob(job: Job<CleanupJobPayload>): Promise<Re
   });
 
   const now = new Date();
-  const sessionRetentionDate = new Date(now.getTime() - payload.retentionDays * 24 * 60 * 60 * 1000);
-  const outboxProcessedRetentionDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-  const webhookRetentionDate = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+  const sessionRetentionDate = new Date(
+    now.getTime() - payload.retentionDays * 24 * 60 * 60 * 1000,
+  );
+  const outboxProcessedRetentionDate = new Date(
+    now.getTime() - 14 * 24 * 60 * 60 * 1000,
+  );
+  const webhookRetentionDate = new Date(
+    now.getTime() - 60 * 24 * 60 * 60 * 1000,
+  );
 
   let expiredSessionsCount = 0;
   let staleOutboxCount = 0;
   let redispatchedOutboxCount = 0;
   let staleWebhooksCount = 0;
+  let staleAttachmentsCount = 0;
 
   // Run cleanup operations with administrative bypass
   await withAdminBypassTransaction(async (tx) => {
@@ -67,7 +79,9 @@ export async function processCleanupJob(job: Job<CleanupJobPayload>): Promise<Re
         const client = getWorkerRedisClient();
         for (const msg of stuckMessages) {
           try {
-            const queue = new Queue(msg.queueName, { connection: client as any });
+            const queue = new Queue(msg.queueName, {
+              connection: client as any,
+            });
             await queue.add(msg.jobName, msg.payload, {
               jobId: `outbox:${msg.idempotencyKey}`,
               attempts: 4,
@@ -87,7 +101,8 @@ export async function processCleanupJob(job: Job<CleanupJobPayload>): Promise<Re
               where: { id: msg.id },
               data: {
                 attempts: { increment: 1 },
-                lastError: err instanceof Error ? err.message : "Outbox dispatch failed",
+                lastError:
+                  err instanceof Error ? err.message : "Outbox dispatch failed",
               },
             });
           }
@@ -104,6 +119,30 @@ export async function processCleanupJob(job: Job<CleanupJobPayload>): Promise<Re
       });
       staleWebhooksCount = webhookResult.count;
     }
+
+    // 5. Stale / abandoned PENDING attachments older than 24h
+    if (
+      payload.scope === "all" ||
+      (payload.scope as string) === "attachments"
+    ) {
+      const abandonedThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const staleAttachments = await (tx as any).attachment.findMany({
+        where: {
+          status: "PENDING",
+          createdAt: { lte: abandonedThreshold },
+        },
+        take: 100,
+      });
+
+      if (staleAttachments.length > 0) {
+        await (tx as any).attachment.deleteMany({
+          where: {
+            id: { in: staleAttachments.map((a: any) => a.id) },
+          },
+        });
+        staleAttachmentsCount = staleAttachments.length;
+      }
+    }
   });
 
   const durationMs = Date.now() - startTime;
@@ -113,6 +152,7 @@ export async function processCleanupJob(job: Job<CleanupJobPayload>): Promise<Re
     staleOutboxCount,
     redispatchedOutboxCount,
     staleWebhooksCount,
+    staleAttachmentsCount,
     durationMs,
   });
 
@@ -122,6 +162,7 @@ export async function processCleanupJob(job: Job<CleanupJobPayload>): Promise<Re
     staleOutboxCount,
     redispatchedOutboxCount,
     staleWebhooksCount,
+    staleAttachmentsCount,
     durationMs,
   };
 }

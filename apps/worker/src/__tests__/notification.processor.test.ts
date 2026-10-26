@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { PrismaClient } from "@workspace/database";
 import { randomUUID } from "node:crypto";
 import { UnrecoverableError } from "bullmq";
@@ -14,11 +14,20 @@ describe("Notification Processor & Tenant Isolation", () => {
     },
   });
 
+  let dbAvailable = false;
   let orgAId: string;
   let userAId: string;
   let userBId: string;
 
   beforeAll(async () => {
+    try {
+      await db.$queryRaw`SELECT 1`;
+      dbAvailable = true;
+    } catch {
+      dbAvailable = false;
+      return;
+    }
+
     // Clean fixtures
     await (db as any).outboxMessage.deleteMany();
     await (db as any).notification.deleteMany();
@@ -87,6 +96,12 @@ describe("Notification Processor & Tenant Isolation", () => {
     await db.$disconnect();
   });
 
+  beforeEach((ctx) => {
+    if (!dbAvailable) {
+      ctx.skip();
+    }
+  });
+
   it("successfully processes valid notification job and dispatches simulated email", async () => {
     emailProvider.clearSentMessages();
     const idempotencyKey = `notif-test-${Date.now()}`;
@@ -130,7 +145,9 @@ describe("Notification Processor & Tenant Isolation", () => {
       },
     };
 
-    await expect(processNotificationJob(invalidJob)).rejects.toThrow(UnrecoverableError);
+    await expect(processNotificationJob(invalidJob)).rejects.toThrow(
+      UnrecoverableError,
+    );
   });
 
   it("enforces tenant isolation: rejects job attempting to deliver Org A notification to Bob (member of Org B only)", async () => {

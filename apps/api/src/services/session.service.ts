@@ -39,6 +39,7 @@ export function getSessionCookieOptions(): CookieOptions {
  */
 export async function createSession(
   userId: string,
+  metadata?: { userAgent?: string; ipAddress?: string },
 ): Promise<{ session: Session; rawToken: string }> {
   const rawToken = generateSessionToken();
   const tokenHash = hashToken(rawToken);
@@ -51,6 +52,12 @@ export async function createSession(
       userId,
       tokenHash,
       expiresAt,
+      userAgent: metadata?.userAgent
+        ? metadata.userAgent.slice(0, 500)
+        : undefined,
+      ipAddress: metadata?.ipAddress
+        ? metadata.ipAddress.slice(0, 45)
+        : undefined,
     },
   });
 
@@ -125,4 +132,99 @@ export async function revokeSession(rawToken: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Retrieves all active, unrevoked sessions for a given user.
+ */
+export async function getUserSessions(
+  userId: string,
+  currentSessionId?: string,
+) {
+  const sessions = await prisma.session.findMany({
+    where: {
+      userId,
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      createdAt: true,
+      lastUsedAt: true,
+      expiresAt: true,
+      userAgent: true,
+      ipAddress: true,
+    },
+  });
+
+  return sessions.map((s) => ({
+    id: s.id,
+    createdAt: s.createdAt.toISOString(),
+    lastUsedAt: s.lastUsedAt ? s.lastUsedAt.toISOString() : null,
+    expiresAt: s.expiresAt.toISOString(),
+    userAgent: s.userAgent,
+    ipAddress: s.ipAddress,
+    isCurrent: Boolean(currentSessionId && s.id === currentSessionId),
+  }));
+}
+
+/**
+ * Revokes a specific session belonging to the user.
+ * Prevents revoking sessions belonging to other users.
+ */
+export async function revokeSessionById(
+  userId: string,
+  sessionId: string,
+): Promise<boolean> {
+  const result = await prisma.session.updateMany({
+    where: {
+      id: sessionId,
+      userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
+    },
+  });
+
+  return result.count > 0;
+}
+
+/**
+ * Revokes all other sessions for the user except the current active session.
+ */
+export async function revokeAllOtherSessions(
+  userId: string,
+  currentSessionId: string,
+): Promise<number> {
+  const result = await prisma.session.updateMany({
+    where: {
+      userId,
+      id: { not: currentSessionId },
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
+    },
+  });
+
+  return result.count;
+}
+
+/**
+ * Revokes all active sessions for a user unconditionally (e.g. on password reset or account deletion).
+ */
+export async function revokeAllUserSessions(userId: string): Promise<number> {
+  const result = await prisma.session.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
+    },
+  });
+
+  return result.count;
 }

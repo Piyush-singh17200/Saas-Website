@@ -8,6 +8,7 @@ import { processNotificationJob } from "./processors/notification.processor.js";
 import { processInvitationExpiryJob } from "./processors/invitation-expiry.processor.js";
 import { processBillingReconciliationJob } from "./processors/billing-reconciliation.processor.js";
 import { processCleanupJob } from "./processors/cleanup.processor.js";
+import { processWebhookDeliveryJob } from "./processors/webhook.processor.js";
 
 dotenv.config();
 
@@ -45,18 +46,25 @@ function registerWorker<T>(
       queueName: name,
       jobId: job.id,
       jobType: job.name,
-      durationMs: job.finishedOn && job.processedOn ? job.finishedOn - job.processedOn : undefined,
+      durationMs:
+        job.finishedOn && job.processedOn
+          ? job.finishedOn - job.processedOn
+          : undefined,
     });
   });
 
   worker.on("failed", (job: Job | undefined, err: Error) => {
     failedJobsCount += 1;
-    logger.error(`Job failed: ${name}/${job?.id}`, {
-      queueName: name,
-      jobId: job?.id,
-      jobType: job?.name,
-      attemptsMade: job?.attemptsMade,
-    }, err);
+    logger.error(
+      `Job failed: ${name}/${job?.id}`,
+      {
+        queueName: name,
+        jobId: job?.id,
+        jobType: job?.name,
+        attemptsMade: job?.attemptsMade,
+      },
+      err,
+    );
   });
 
   worker.on("error", (err: Error) => {
@@ -68,10 +76,31 @@ function registerWorker<T>(
 }
 
 // Instantiate queue workers
-export const notificationWorker = registerWorker(QueueName.NOTIFICATIONS, processNotificationJob, 5);
-export const invitationWorker = registerWorker(QueueName.INVITATION_EXPIRY, processInvitationExpiryJob, 2);
-export const billingWorker = registerWorker(QueueName.BILLING_RECONCILIATION, processBillingReconciliationJob, 2);
-export const maintenanceWorker = registerWorker(QueueName.MAINTENANCE, processCleanupJob, 1);
+export const notificationWorker = registerWorker(
+  QueueName.NOTIFICATIONS,
+  processNotificationJob,
+  5,
+);
+export const invitationWorker = registerWorker(
+  QueueName.INVITATION_EXPIRY,
+  processInvitationExpiryJob,
+  2,
+);
+export const billingWorker = registerWorker(
+  QueueName.BILLING_RECONCILIATION,
+  processBillingReconciliationJob,
+  2,
+);
+export const maintenanceWorker = registerWorker(
+  QueueName.MAINTENANCE,
+  processCleanupJob,
+  1,
+);
+export const webhookWorker = registerWorker(
+  QueueName.WEBHOOKS,
+  processWebhookDeliveryJob,
+  5,
+);
 
 logger.info("All background workers registered and listening for queue tasks", {
   activeQueues: [
@@ -79,6 +108,7 @@ logger.info("All background workers registered and listening for queue tasks", {
     QueueName.INVITATION_EXPIRY,
     QueueName.BILLING_RECONCILIATION,
     QueueName.MAINTENANCE,
+    QueueName.WEBHOOKS,
   ],
 });
 
@@ -93,9 +123,15 @@ function startPeriodicTasks(): void {
     if (isShuttingDown) return;
     try {
       // Periodic invitation expiry sweep
-      await processInvitationExpiryJob({ id: "scheduled-invitation-sweep", data: { sweepOnly: true } } as any);
+      await processInvitationExpiryJob({
+        id: "scheduled-invitation-sweep",
+        data: { sweepOnly: true },
+      } as any);
       // Periodic maintenance cleanup
-      await processCleanupJob({ id: "scheduled-maintenance", data: { retentionDays: 30, scope: "all" } } as any);
+      await processCleanupJob({
+        id: "scheduled-maintenance",
+        data: { retentionDays: 30, scope: "all" },
+      } as any);
     } catch (err) {
       logger.error("Error during scheduled maintenance run", {}, err);
     }
@@ -111,11 +147,14 @@ export async function shutdownWorker(signal = "SIGTERM"): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
-  logger.info(`Received ${signal}. Starting graceful shutdown of background workers...`, {
-    processedJobsCount,
-    failedJobsCount,
-    uptimeSeconds: Math.floor((Date.now() - startTime) / 1000),
-  });
+  logger.info(
+    `Received ${signal}. Starting graceful shutdown of background workers...`,
+    {
+      processedJobsCount,
+      failedJobsCount,
+      uptimeSeconds: Math.floor((Date.now() - startTime) / 1000),
+    },
+  );
 
   if (schedulerTimer) {
     clearInterval(schedulerTimer);
@@ -124,7 +163,9 @@ export async function shutdownWorker(signal = "SIGTERM"): Promise<void> {
 
   // Set bounded shutdown deadline
   const shutdownTimeout = setTimeout(() => {
-    logger.error("Worker shutdown deadline reached (10s). Forcing termination.");
+    logger.error(
+      "Worker shutdown deadline reached (10s). Forcing termination.",
+    );
     process.exit(1);
   }, 10000).unref();
 

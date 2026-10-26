@@ -9,10 +9,13 @@ import { logger } from "./lib/logger.js";
 const app = createApp();
 
 const server: Server = app.listen(env.PORT, () => {
-  logger.info(`WorkSpace API server running in ${env.NODE_ENV} mode on port ${env.PORT}`, {
-    port: env.PORT,
-    environment: env.NODE_ENV,
-  });
+  logger.info(
+    `WorkSpace API server running in ${env.NODE_ENV} mode on port ${env.PORT}`,
+    {
+      port: env.PORT,
+      environment: env.NODE_ENV,
+    },
+  );
 });
 
 let isShuttingDown = false;

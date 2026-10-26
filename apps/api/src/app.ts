@@ -14,11 +14,42 @@ import { generalRateLimiter } from "./middleware/rate-limit.middleware.js";
 export function createApp(): Express {
   const app = express();
 
+  // Suppress express banner header
+  app.disable("x-powered-by");
+
   // Explicit proxy configuration
   app.set("trust proxy", env.TRUST_PROXY);
 
-  // Security and baseline middleware
-  app.use(helmet());
+  // Security headers via Helmet
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https:"],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          mediaSrc: ["'self'"],
+          frameSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'none'"],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      hsts: {
+        maxAge: 63072000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+      permittedCrossDomainPolicies: { permittedPolicies: "none" },
+    }),
+  );
   app.use(
     cors({
       origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN,

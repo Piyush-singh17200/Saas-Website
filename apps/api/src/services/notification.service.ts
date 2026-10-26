@@ -18,7 +18,11 @@ export class NotificationService {
     organizationId: string,
     userId: string,
     query: NotificationListQuery,
-  ): Promise<{ notifications: NotificationResponse[]; total: number; unreadCount: number }> {
+  ): Promise<{
+    notifications: NotificationResponse[];
+    total: number;
+    unreadCount: number;
+  }> {
     return withTenantTransaction(organizationId, async (tx) => {
       const where: any = {
         organizationId,
@@ -109,7 +113,10 @@ export class NotificationService {
   /**
    * Marks all notifications as read for a user in the organization.
    */
-  public async markAllAsRead(organizationId: string, userId: string): Promise<{ count: number }> {
+  public async markAllAsRead(
+    organizationId: string,
+    userId: string,
+  ): Promise<{ count: number }> {
     return withTenantTransaction(organizationId, async (tx) => {
       const result = await (tx as any).notification.updateMany({
         where: { organizationId, userId, readAt: null },

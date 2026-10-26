@@ -9,12 +9,16 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
+    "test:e2e": "pnpm --filter @workspace/web test:e2e",
     "prisma:generate": "turbo prisma:generate",
+    "db:backup": "tsx scripts/backup-db.ts",
+    "db:restore": "tsx scripts/restore-db.ts",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\""
   },
   "devDependencies": {
     "prettier": "^3.5.3",
+    "tsx": "^4.19.3",
     "turbo": "^2.4.4",
     "typescript": "^5.8.2"
   },

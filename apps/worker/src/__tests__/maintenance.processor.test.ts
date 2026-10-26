@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { PrismaClient } from "@workspace/database";
 import { randomUUID } from "node:crypto";
 import { processInvitationExpiryJob } from "../processors/invitation-expiry.processor.js";
@@ -14,10 +14,19 @@ describe("Maintenance, Cleanup & Billing Processors", () => {
     },
   });
 
+  let dbAvailable = false;
   let testOrgId: string;
   let testUserId: string;
 
   beforeAll(async () => {
+    try {
+      await db.$queryRaw`SELECT 1`;
+      dbAvailable = true;
+    } catch {
+      dbAvailable = false;
+      return;
+    }
+
     await (db as any).outboxMessage.deleteMany();
     await (db as any).notification.deleteMany();
     await db.session.deleteMany();
@@ -57,6 +66,12 @@ describe("Maintenance, Cleanup & Billing Processors", () => {
 
   afterAll(async () => {
     await db.$disconnect();
+  });
+
+  beforeEach((ctx) => {
+    if (!dbAvailable) {
+      ctx.skip();
+    }
   });
 
   describe("Invitation Expiry", () => {
@@ -110,15 +125,21 @@ describe("Maintenance, Cleanup & Billing Processors", () => {
       expect(result.expiredCount).toBeGreaterThanOrEqual(1);
 
       // Verify expired invitation was revoked, NOT deleted
-      const refreshedExpired = await db.invitation.findUnique({ where: { id: expiredInvite.id } });
+      const refreshedExpired = await db.invitation.findUnique({
+        where: { id: expiredInvite.id },
+      });
       expect(refreshedExpired?.revokedAt).not.toBeNull();
 
       // Verify active invitation remains unrevoked
-      const refreshedActive = await db.invitation.findUnique({ where: { id: activeInvite.id } });
+      const refreshedActive = await db.invitation.findUnique({
+        where: { id: activeInvite.id },
+      });
       expect(refreshedActive?.revokedAt).toBeNull();
 
       // Verify accepted invitation remains unchanged
-      const refreshedAccepted = await db.invitation.findUnique({ where: { id: acceptedInvite.id } });
+      const refreshedAccepted = await db.invitation.findUnique({
+        where: { id: acceptedInvite.id },
+      });
       expect(refreshedAccepted?.acceptedAt).not.toBeNull();
       expect(refreshedAccepted?.revokedAt).toBeNull();
 
@@ -164,7 +185,9 @@ describe("Maintenance, Cleanup & Billing Processors", () => {
       expect(cleanupResult.expiredSessionsCount).toBe(1);
 
       // Verify active session was NOT deleted
-      const surviving = await db.session.findUnique({ where: { id: validSession.id } });
+      const surviving = await db.session.findUnique({
+        where: { id: validSession.id },
+      });
       expect(surviving).not.toBeNull();
     });
   });
@@ -190,7 +213,9 @@ describe("Maintenance, Cleanup & Billing Processors", () => {
       expect(reconResult.status).toBe("reconciled");
       expect(reconResult.plan).toBe("FREE");
 
-      const refreshed = await db.subscription.findUnique({ where: { id: sub.id } });
+      const refreshed = await db.subscription.findUnique({
+        where: { id: sub.id },
+      });
       expect(refreshed?.plan).toBe("FREE"); // Did NOT unearned grant PRO
     });
   });

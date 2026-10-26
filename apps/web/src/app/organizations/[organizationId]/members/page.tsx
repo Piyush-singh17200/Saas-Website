@@ -38,9 +38,12 @@ export default function OrganizationMembersPage() {
   const [invitations, setInvitations] = useState<InvitationResponse[]>([]);
   const [billing, setBilling] = useState<BillingSummaryResponse | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<MembershipRoleType>("MEMBER");
+  const [currentUserRole, setCurrentUserRole] =
+    useState<MembershipRoleType>("MEMBER");
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -48,8 +51,23 @@ export default function OrganizationMembersPage() {
   // Modals & Action States
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [confirmDeleteMember, setConfirmDeleteMember] = useState<MembershipResponse | null>(null);
-  const [confirmRevokeInvite, setConfirmRevokeInvite] = useState<InvitationResponse | null>(null);
+  const [confirmDeleteMember, setConfirmDeleteMember] =
+    useState<MembershipResponse | null>(null);
+  const [confirmRevokeInvite, setConfirmRevokeInvite] =
+    useState<InvitationResponse | null>(null);
+  const [copiedInviteUrl, setCopiedInviteUrl] = useState<string | null>(null);
+
+  // Keyboard accessibility for confirmation dialogs
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (confirmDeleteMember) setConfirmDeleteMember(null);
+        if (confirmRevokeInvite) setConfirmRevokeInvite(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [confirmDeleteMember, confirmRevokeInvite]);
 
   const loadData = useCallback(async () => {
     if (!organizationId) return;
@@ -96,7 +114,11 @@ export default function OrganizationMembersPage() {
         setInvitations([]);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load organization members");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load organization members",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -110,30 +132,41 @@ export default function OrganizationMembersPage() {
   const canManage = currentUserRole === "OWNER" || currentUserRole === "ADMIN";
   const isOwner = currentUserRole === "OWNER";
 
-  // Filter members by name or email
+  // Filter members by name, email, role, and status
   const filteredMembers = useMemo(() => {
-    if (!searchQuery.trim()) return members;
-    const q = searchQuery.toLowerCase();
-    return members.filter(
-      (m) =>
-        m.user?.displayName?.toLowerCase().includes(q) ||
-        m.user?.email?.toLowerCase().includes(q),
-    );
-  }, [members, searchQuery]);
+    return members.filter((m) => {
+      if (roleFilter && m.role !== roleFilter) return false;
+      if (statusFilter && m.status !== statusFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesName = m.user?.displayName?.toLowerCase().includes(q);
+        const matchesEmail = m.user?.email?.toLowerCase().includes(q);
+        if (!matchesName && !matchesEmail) return false;
+      }
+      return true;
+    });
+  }, [members, searchQuery, roleFilter, statusFilter]);
 
   // Member role update
-  const handleUpdateRole = async (targetUserId: string, newRole: "ADMIN" | "MEMBER") => {
+  const handleUpdateRole = async (
+    targetUserId: string,
+    newRole: "ADMIN" | "MEMBER",
+  ) => {
     try {
       setActionLoadingId(targetUserId);
       setError(null);
       await apiClient.updateMemberRole(organizationId, targetUserId, newRole);
       setMembers((prev) =>
-        prev.map((m) => (m.userId === targetUserId ? { ...m, role: newRole } : m)),
+        prev.map((m) =>
+          m.userId === targetUserId ? { ...m, role: newRole } : m,
+        ),
       );
       setSuccessMessage("Member role updated successfully");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to update member role");
+      setError(
+        err instanceof Error ? err.message : "Failed to update member role",
+      );
     } finally {
       setActionLoadingId(null);
     }
@@ -146,7 +179,9 @@ export default function OrganizationMembersPage() {
       setActionLoadingId(confirmDeleteMember.userId);
       setError(null);
       await apiClient.removeMember(organizationId, confirmDeleteMember.userId);
-      setMembers((prev) => prev.filter((m) => m.userId !== confirmDeleteMember.userId));
+      setMembers((prev) =>
+        prev.filter((m) => m.userId !== confirmDeleteMember.userId),
+      );
       setConfirmDeleteMember(null);
       setSuccessMessage("Member removed from organization");
       setTimeout(() => setSuccessMessage(null), 3000);
@@ -164,12 +199,16 @@ export default function OrganizationMembersPage() {
       setActionLoadingId(confirmRevokeInvite.id);
       setError(null);
       await apiClient.revokeInvitation(organizationId, confirmRevokeInvite.id);
-      setInvitations((prev) => prev.filter((inv) => inv.id !== confirmRevokeInvite.id));
+      setInvitations((prev) =>
+        prev.filter((inv) => inv.id !== confirmRevokeInvite.id),
+      );
       setConfirmRevokeInvite(null);
       setSuccessMessage("Invitation revoked");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to revoke invitation");
+      setError(
+        err instanceof Error ? err.message : "Failed to revoke invitation",
+      );
     } finally {
       setActionLoadingId(null);
     }
@@ -180,14 +219,26 @@ export default function OrganizationMembersPage() {
     try {
       setActionLoadingId(invitationId);
       setError(null);
-      const res = await apiClient.resendInvitation(organizationId, invitationId);
+      const res = await apiClient.resendInvitation(
+        organizationId,
+        invitationId,
+      );
       setInvitations((prev) =>
         prev.map((inv) => (inv.id === invitationId ? res.invitation : inv)),
       );
-      setSuccessMessage("Invitation resent with renewed expiry");
-      setTimeout(() => setSuccessMessage(null), 3000);
+
+      if (res.invitation.token && typeof window !== "undefined") {
+        const fullUrl = `${window.location.origin}/invitations/${res.invitation.token}`;
+        setCopiedInviteUrl(fullUrl);
+        setSuccessMessage("Invitation resent! Copied fresh link to view.");
+      } else {
+        setSuccessMessage("Invitation resent with renewed expiry");
+      }
+      setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to resend invitation");
+      setError(
+        err instanceof Error ? err.message : "Failed to resend invitation",
+      );
     } finally {
       setActionLoadingId(null);
     }
@@ -301,21 +352,91 @@ export default function OrganizationMembersPage() {
           </div>
         )}
 
-        {/* Search & Stats Bar */}
-        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter members by name or email..."
-              className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
-            />
+        {copiedInviteUrl && (
+          <div className="mt-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span>
+                <strong>Invitation Link:</strong> Share directly with the
+                recipient:{" "}
+                <code className="text-white font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                  {copiedInviteUrl}
+                </code>
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(copiedInviteUrl);
+                setSuccessMessage("Invitation link copied to clipboard!");
+                setTimeout(() => setSuccessMessage(null), 2500);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-semibold shrink-0"
+            >
+              Copy Link
+            </button>
+          </div>
+        )}
+
+        {/* Search & Filter Toolbar */}
+        <div className="mt-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search name or email..."
+                className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+            </div>
+
+            {/* Role Filter */}
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              aria-label="Filter by member role"
+              className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-medium text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+            >
+              <option value="">All Roles</option>
+              <option value="OWNER">Owner</option>
+              <option value="ADMIN">Admin</option>
+              <option value="MEMBER">Member</option>
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter by membership status"
+              className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-medium text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+            >
+              <option value="">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="SUSPENDED">Suspended</option>
+            </select>
+
+            {(searchQuery || roleFilter || statusFilter) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setRoleFilter("");
+                  setStatusFilter("");
+                }}
+                className="text-xs text-slate-400 hover:text-white underline transition-colors px-1"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
 
-          <div className="text-xs text-slate-400">
-            Showing <span className="font-semibold text-white">{filteredMembers.length}</span> members
+          <div className="text-xs text-slate-400 shrink-0">
+            Showing{" "}
+            <span className="font-semibold text-white">
+              {filteredMembers.length}
+            </span>{" "}
+            of {members.length} members
           </div>
         </div>
 
@@ -336,19 +457,40 @@ export default function OrganizationMembersPage() {
               <span>Loading team members...</span>
             </div>
           ) : filteredMembers.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-sm">
-              No members found matching &quot;{searchQuery}&quot;.
+            <div className="p-12 text-center text-slate-400 text-sm space-y-3">
+              <Users className="w-8 h-8 text-slate-600 mx-auto" />
+              <p>
+                {searchQuery || roleFilter || statusFilter
+                  ? "No team members match your selected filters."
+                  : "No members currently enrolled in this organization."}
+              </p>
+              {(searchQuery || roleFilter || statusFilter) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setRoleFilter("");
+                    setStatusFilter("");
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white transition-colors"
+                >
+                  Reset all filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-300">
+                <caption className="sr-only">Organization Active Members List</caption>
                 <thead className="bg-slate-950/40 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
                   <tr>
                     <th className="px-6 py-3.5">User</th>
                     <th className="px-6 py-3.5">Role</th>
                     <th className="px-6 py-3.5">Status</th>
                     <th className="px-6 py-3.5">Joined</th>
-                    {canManage && <th className="px-6 py-3.5 text-right">Actions</th>}
+                    {canManage && (
+                      <th className="px-6 py-3.5 text-right">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
@@ -363,7 +505,10 @@ export default function OrganizationMembersPage() {
                       currentUserRole === "ADMIN" && member.role === "MEMBER";
 
                     return (
-                      <tr key={member.id} className="hover:bg-slate-800/30 transition-colors">
+                      <tr
+                        key={member.id}
+                        className="hover:bg-slate-800/30 transition-colors"
+                      >
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700/80 flex items-center justify-center font-bold text-slate-300 text-sm uppercase">
@@ -371,19 +516,25 @@ export default function OrganizationMembersPage() {
                             </div>
                             <div>
                               <div className="font-medium text-white flex items-center gap-2">
-                                <span>{member.user?.displayName || "Anonymous User"}</span>
+                                <span>
+                                  {member.user?.displayName || "Anonymous User"}
+                                </span>
                                 {isSelf && (
                                   <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                                     You
                                   </span>
                                 )}
                               </div>
-                              <div className="text-xs text-slate-400">{member.user?.email}</div>
+                              <div className="text-xs text-slate-400">
+                                {member.user?.email}
+                              </div>
                             </div>
                           </div>
                         </td>
 
-                        <td className="px-6 py-4">{getRoleBadge(member.role)}</td>
+                        <td className="px-6 py-4">
+                          {getRoleBadge(member.role)}
+                        </td>
 
                         <td className="px-6 py-4">
                           <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
@@ -393,10 +544,13 @@ export default function OrganizationMembersPage() {
                         </td>
 
                         <td className="px-6 py-4 text-xs text-slate-400">
-                          {new Date(member.joinedAt || member.createdAt).toLocaleDateString(
-                            undefined,
-                            { year: "numeric", month: "short", day: "numeric" },
-                          )}
+                          {new Date(
+                            member.joinedAt || member.createdAt,
+                          ).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}
                         </td>
 
                         {canManage && (
@@ -421,17 +575,20 @@ export default function OrganizationMembersPage() {
                               )}
 
                               {/* Remove member button */}
-                              {(canDemoteOrRemove || canAdminRemove) && !isSelf && (
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDeleteMember(member)}
-                                  disabled={actionLoadingId === member.userId}
-                                  title="Remove member from organization"
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
+                              {(canDemoteOrRemove || canAdminRemove) &&
+                                !isSelf && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setConfirmDeleteMember(member)
+                                    }
+                                    disabled={actionLoadingId === member.userId}
+                                    title="Remove member from organization"
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
 
                               {isMemberOwner && isOwnerCountOne && (
                                 <span className="text-[11px] text-slate-500 italic">
@@ -465,11 +622,13 @@ export default function OrganizationMembersPage() {
 
             {invitations.length === 0 ? (
               <div className="p-8 text-center text-slate-500 text-xs">
-                No pending invitations. All invited members have either joined or invitations have expired.
+                No pending invitations. All invited members have either joined
+                or invitations have expired.
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-300">
+                  <caption className="sr-only">Pending Organization Invitations</caption>
                   <thead className="bg-slate-950/40 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
                     <tr>
                       <th className="px-6 py-3.5">Recipient Email</th>
@@ -481,23 +640,33 @@ export default function OrganizationMembersPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {invitations.map((inv) => (
-                      <tr key={inv.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="px-6 py-4 font-medium text-white">{inv.email}</td>
+                      <tr
+                        key={inv.id}
+                        className="hover:bg-slate-800/30 transition-colors"
+                      >
+                        <td className="px-6 py-4 font-medium text-white">
+                          {inv.email}
+                        </td>
 
                         <td className="px-6 py-4">{getRoleBadge(inv.role)}</td>
 
                         <td className="px-6 py-4 text-xs text-slate-400">
-                          {inv.inviter?.displayName || inv.inviter?.email || "Admin"}
+                          {inv.inviter?.displayName ||
+                            inv.inviter?.email ||
+                            "Admin"}
                         </td>
 
                         <td className="px-6 py-4 text-xs text-slate-400">
                           <div className="flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-slate-500" />
                             <span>
-                              {new Date(inv.expiresAt).toLocaleDateString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                              })}
+                              {new Date(inv.expiresAt).toLocaleDateString(
+                                undefined,
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                },
+                              )}
                             </span>
                           </div>
                         </td>
@@ -550,29 +719,45 @@ export default function OrganizationMembersPage() {
 
       {/* Confirm Member Removal Modal */}
       {confirmDeleteMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-delete-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150"
+        >
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl">
             <div className="flex items-center gap-3 text-rose-400 mb-3">
               <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/30">
                 <Trash2 className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-semibold text-white">Remove Team Member?</h3>
+              <h3
+                id="confirm-delete-title"
+                className="text-base font-semibold text-white"
+              >
+                Remove Team Member?
+              </h3>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed mb-5">
-              Are you sure you want to remove <strong className="text-white">{confirmDeleteMember.user?.displayName || confirmDeleteMember.user?.email}</strong> from the organization? They will immediately lose access to all projects, tasks, and data.
+              Are you sure you want to remove{" "}
+              <strong className="text-white">
+                {confirmDeleteMember.user?.displayName ||
+                  confirmDeleteMember.user?.email}
+              </strong>{" "}
+              from the organization? They will immediately lose access to all
+              projects, tasks, and data.
             </p>
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setConfirmDeleteMember(null)}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleRemoveMember}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-500 hover:bg-rose-400 text-white transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-500 hover:bg-rose-400 text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
               >
                 Remove Member
               </button>
@@ -583,29 +768,43 @@ export default function OrganizationMembersPage() {
 
       {/* Confirm Revoke Invite Modal */}
       {confirmRevokeInvite && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-revoke-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150"
+        >
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl">
             <div className="flex items-center gap-3 text-amber-400 mb-3">
               <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30">
                 <XCircle className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-semibold text-white">Revoke Invitation?</h3>
+              <h3
+                id="confirm-revoke-title"
+                className="text-base font-semibold text-white"
+              >
+                Revoke Invitation?
+              </h3>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed mb-5">
-              Are you sure you want to revoke the pending invitation for <strong className="text-white">{confirmRevokeInvite.email}</strong>? The invitation link will no longer be valid.
+              Are you sure you want to revoke the pending invitation for{" "}
+              <strong className="text-white">
+                {confirmRevokeInvite.email}
+              </strong>
+              ? The invitation link will no longer be valid.
             </p>
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setConfirmRevokeInvite(null)}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleRevokeInvitation}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
               >
                 Revoke Invitation
               </button>

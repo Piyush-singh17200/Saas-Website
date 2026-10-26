@@ -1,11 +1,18 @@
 import { type Job } from "bullmq";
-import { InvitationExpiryJobPayloadSchema, type InvitationExpiryJobPayload } from "@workspace/contracts";
+import {
+  InvitationExpiryJobPayloadSchema,
+  type InvitationExpiryJobPayload,
+} from "@workspace/contracts";
 import { withAdminBypassTransaction } from "@workspace/database";
 import { logger } from "../lib/logger.js";
 
-export async function processInvitationExpiryJob(job: Job<InvitationExpiryJobPayload>): Promise<Record<string, unknown>> {
+export async function processInvitationExpiryJob(
+  job: Job<InvitationExpiryJobPayload>,
+): Promise<Record<string, unknown>> {
   const startTime = Date.now();
-  const parseResult = InvitationExpiryJobPayloadSchema.safeParse(job.data || {});
+  const parseResult = InvitationExpiryJobPayloadSchema.safeParse(
+    job.data || {},
+  );
   const payload = parseResult.success ? parseResult.data : { sweepOnly: true };
 
   logger.info("Starting invitation expiry processing", {
@@ -60,7 +67,9 @@ export async function processInvitationExpiryJob(job: Job<InvitationExpiryJobPay
         expiresAt: { lte: now },
         acceptedAt: null,
         revokedAt: null,
-        ...(payload.organizationId ? { organizationId: payload.organizationId } : {}),
+        ...(payload.organizationId
+          ? { organizationId: payload.organizationId }
+          : {}),
       },
       data: {
         revokedAt: now,

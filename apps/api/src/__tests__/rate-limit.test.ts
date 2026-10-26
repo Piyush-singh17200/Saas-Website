@@ -52,7 +52,9 @@ describe("Rate Limiting & Resilience Policies", () => {
       expect(res.status).toBe(503);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe("SERVICE_UNAVAILABLE");
-      expect(res.body.error.message).toContain("Rate limiting service is unavailable");
+      expect(res.body.error.message).toContain(
+        "Rate limiting service is unavailable",
+      );
     });
 
     it("allows request through when Redis is connected and healthy", async () => {

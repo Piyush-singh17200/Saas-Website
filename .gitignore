@@ -22,12 +22,26 @@ pnpm-debug.log*
 
 # Environment files
 .env
-.env*.local
+.env.*
 !.env.example
+!.env.production.example
 
-# Test coverage
+# Backups
+backups/
+*.dump
+
+
+# Test coverage & reports
 coverage/
 *.lcov
+test-results/
+playwright-report/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Unrelated local reverse-engineering workspace (not part of this app)
+rea/
 
 # Prisma generated artifacts
 packages/database/src/generated/

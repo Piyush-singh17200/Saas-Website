@@ -9,6 +9,8 @@ import {
 import { checkDatabaseConnection } from "@workspace/database";
 import { checkRedisConnection } from "../lib/redis.js";
 
+import { env } from "../config/env.js";
+
 export const healthRouter: Router = Router();
 
 const startTime = Date.now();
@@ -31,6 +33,7 @@ healthRouter.get("/health", (req: Request, res: Response) => {
 /**
  * Readiness probe: checks downstream dependencies (PostgreSQL and Redis).
  * Returns 200 if critical dependencies are connected, otherwise 503.
+ * Shields internal infrastructure details and hostnames in production mode.
  */
 healthRouter.get("/ready", async (req: Request, res: Response) => {
   const [dbHealth, redisHealth] = await Promise.all([
@@ -39,6 +42,7 @@ healthRouter.get("/ready", async (req: Request, res: Response) => {
   ]);
 
   const isReady = dbHealth.ok;
+  const isProd = env.NODE_ENV === "production";
 
   const readinessData: ReadinessData = {
     status: isReady ? "ready" : "not_ready",
@@ -50,14 +54,26 @@ healthRouter.get("/ready", async (req: Request, res: Response) => {
         ...(dbHealth.latencyMs !== undefined
           ? { latencyMs: dbHealth.latencyMs }
           : {}),
-        ...(dbHealth.error ? { message: dbHealth.error } : {}),
+        ...(dbHealth.error
+          ? {
+              message: isProd
+                ? "Database connectivity check failed"
+                : dbHealth.error,
+            }
+          : {}),
       },
       redis: {
         status: redisHealth.ok ? "connected" : "disconnected",
         ...(redisHealth.latencyMs !== undefined
           ? { latencyMs: redisHealth.latencyMs }
           : {}),
-        ...(redisHealth.error ? { message: redisHealth.error } : {}),
+        ...(redisHealth.error
+          ? {
+              message: isProd
+                ? "Redis connectivity check failed"
+                : redisHealth.error,
+            }
+          : {}),
       },
     },
     timestamp: new Date().toISOString(),

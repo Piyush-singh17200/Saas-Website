@@ -25,10 +25,14 @@ import {
 import { requireActiveMembership } from "../middleware/organization.middleware.js";
 import { AppError } from "../middleware/error-handler.js";
 import { commentRouter } from "./comment.router.js";
+import { attachmentRouter } from "./attachment.router.js";
+import { taskTagRouter } from "./tag.router.js";
 
 export const taskRouter: Router = Router({ mergeParams: true });
 
 taskRouter.use("/:taskId/comments", commentRouter);
+taskRouter.use("/:taskId/attachments", attachmentRouter);
+taskRouter.use("/:taskId/tags", taskTagRouter);
 
 function getParam(param: string | string[] | undefined): string {
   if (Array.isArray(param)) return param[0] || "";

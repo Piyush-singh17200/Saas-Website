@@ -67,5 +67,39 @@ describe("GET /api/v1/ready", () => {
       "Database connection timeout",
     );
   });
-});
 
+  it("shields internal error messages when NODE_ENV is production", async () => {
+    const { env } = await import("../config/env.js");
+    const originalEnv = env.NODE_ENV;
+    (env as any).NODE_ENV = "production";
+
+    try {
+      vi.mocked(dbModule.checkDatabaseConnection).mockResolvedValueOnce(
+        createMockDatabaseHealth(
+          false,
+          35,
+          "Connection refused at 10.0.1.45:5432",
+        ),
+      );
+      vi.mocked(redisModule.checkRedisConnection).mockResolvedValueOnce({
+        ok: false,
+        latencyMs: 10,
+        error: "Redis timeout at 10.0.1.99:6379",
+      });
+
+      const res = await request(app).get("/api/v1/ready");
+
+      expect(res.status).toBe(503);
+      expect(res.body.error.details.checks.database.message).toBe(
+        "Database connectivity check failed",
+      );
+      expect(res.body.error.details.checks.redis.message).toBe(
+        "Redis connectivity check failed",
+      );
+      expect(JSON.stringify(res.body)).not.toContain("10.0.1.45");
+      expect(JSON.stringify(res.body)).not.toContain("10.0.1.99");
+    } finally {
+      (env as any).NODE_ENV = originalEnv;
+    }
+  });
+});
