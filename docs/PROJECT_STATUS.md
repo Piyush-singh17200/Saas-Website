@@ -1,9 +1,9 @@
 # WorkSpace — Project Status & Handover
 
-**Last verified:** 2026-10-26 (local Windows workstation)
+**Last verified:** 2026-10-27 (local Windows workstation + GitHub Actions Linux runner)
 **Repository:** `C:\Users\singh\OneDrive\Desktop\Saas Project`
-**Git state:** hardening changes based on checkpoint `1566469` (locally rewritten from `1a2735d` to remove a fake Stripe placeholder before the first push); inspect `git log -1` and `git status` for the current commit and working tree. Remote `origin` is configured at `https://github.com/Piyush-singh17200/Saas-Website.git`; the remote was empty when inspected.
-**Verification scope:** local PostgreSQL 18, local Docker Desktop 29.8.2 / Compose v5.5.1, local builds/tests, and Playwright. GitHub Actions has not been run remotely. No production deployment, production database, live Stripe call, real email send, TLS check, or backup/restore drill was performed. The throwaway Compose stack was removed after verification.
+**Git state:** code verified at `eebc35c` on `master`; remote `origin` is `https://github.com/Piyush-singh17200/Saas-Website.git`. Remote CI run [`40490031815`](https://github.com/Piyush-singh17200/Saas-Website/actions/runs/40490031815) is green for that commit.
+**Verification scope:** local PostgreSQL/Docker, local live API-backed preview, local release gates, GitHub Actions Linux tests/build/Playwright, and remote Docker image builds. No production deployment, production database, live Stripe call, real email send, public DNS/TLS check, or backup/restore drill was performed. The local preview uses the Docker test database and is not a production environment.
 
 This document distinguishes what was actually executed from what is only implemented or configured. Status values:
 
@@ -27,15 +27,17 @@ Priority 1 (RLS on the runtime database path) and Priority 2 (executable CI/E2E)
 - The Compose run applied all 10 migrations, served `/api/v1/ready` through Nginx with database and Redis connected, and proved tenant isolation with the live app role.
 - CI now creates `workspace_test`, provisions `workspace_app` before and after migrations, exposes `TEST_APP_DATABASE_URL`, and builds the migration image target.
 - Playwright starts the built Next.js server automatically through `webServer`.
-- The full local release gates pass: formatting, lint, typecheck, 230 API tests, 16 worker tests, production build, 10 Playwright tests, and Docker image builds/container smoke tests.
+- The full local release gates pass: formatting, lint, typecheck, 230 API tests, 16 worker tests, 28 additional package tests, production build, 10 Playwright tests, and Docker image builds/container smoke tests.
+- Remote GitHub Actions run `40490031815` passes: Linux formatting/lint/typecheck/security checks, API 230/230, worker 16/16, 28 additional tests, the production build, Playwright 10/10, and Docker builds for API, migration, worker, and web images.
+- A local API-backed browser preview was exercised at `http://localhost:3000` against the Docker `workspace_test` database with the unprivileged app role and RLS enforcement. The preview is local-only and uses demo data.
 
-It is **not production-ready yet**:
+It is **not globally launched yet**:
 
-1. GitHub Actions has not been executed on GitHub. The workflow is configured but unverified remotely.
-2. The Compose verification was local and used placeholder secrets, HTTP on `localhost`, and a throwaway volume. There is no production host, domain, TLS ingress, or real secrets yet.
-3. Real email delivery, live Stripe billing, deployment automation, and backup/restore drills remain blocked on credentials or infrastructure.
-4. Real outbound worker webhook/email delivery has not been exercised against an external endpoint or provider.
-5. Ownership transfer and some operational integrations remain unimplemented.
+1. There is no production host, public domain, DNS, TLS ingress, or production secret set. The verified Compose run used placeholder secrets, HTTP on `localhost`, and a throwaway volume.
+2. Real email delivery, live Stripe billing, deployment automation, and backup/restore drills remain blocked on credentials or infrastructure.
+3. Real outbound worker webhook/email delivery has not been exercised against an external endpoint or provider.
+4. Ownership transfer and some operational integrations remain unimplemented.
+5. No production deployment has been performed or approved.
 
 ---
 
@@ -77,18 +79,23 @@ Measured contents:
 
 ---
 
-## 3. Verified Results (2026-10-26)
+## 3. Verified Results (2026-10-27)
 
-All results below were produced locally against the current working tree.
+Results below combine local verification with remote GitHub Actions run [`40490031815`](https://github.com/Piyush-singh17200/Saas-Website/actions/runs/40490031815) for code commit `eebc35c`.
 
 | Check                   | Command                                                                                    | Result                                                                                                                                                                       |
 | ----------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub Actions CI       | Push `eebc35c` to `master`                                                                 | **Success**: all 20 test/build steps and all Docker-build steps passed on the Linux runner                                                                                   |
+| Remote test totals      | CI job log                                                                                 | **API 230/230**, **worker 16/16**, **28 additional package tests**, **Playwright 10/10**, production build **6/6**                                                           |
+| Remote Docker images    | CI `Build & Validate Docker Images` job                                                    | **API, database migration, worker, and web images built successfully**                                                                                                       |
+| Local live preview      | `http://localhost:3000`; `http://localhost:4000/api/v1/ready`                              | **200**; app role `workspace_app`, database + Redis connected; project board showed the seeded task                                                                          |
 | Formatting              | `pnpm format:check`                                                                        | **All matched files use Prettier code style**                                                                                                                                |
 | Lint                    | `pnpm lint`                                                                                | **6/6 tasks successful** (API/worker TypeScript, web ESLint)                                                                                                                 |
 | Full typecheck          | `pnpm turbo typecheck --force`                                                             | **9/9 tasks successful, 0 cached**                                                                                                                                           |
 | Full production build   | `pnpm turbo build --force`                                                                 | **6/6 tasks successful, 0 cached**; Next.js production build completed                                                                                                       |
-| API test suite          | `pnpm --filter @workspace/api exec vitest run` with explicit owner/app DB URLs             | **230/230 tests passed, 26/26 files**, 145.36s                                                                                                                               |
-| Worker test suite       | `pnpm --filter @workspace/worker exec vitest run` with explicit owner DB URL               | **16/16 tests passed, 3/3 files**, 4.88s; 7 integration tests skip if the DB URL is absent                                                                                   |
+| Full serialized suite   | `pnpm test` (`turbo test --concurrency=1`) with owner/app DB URLs                          | **5/5 test tasks successful**; API and worker share the test database without racing                                                                                         |
+| API test suite          | `pnpm --filter @workspace/api exec vitest run` with explicit owner/app DB URLs             | **230/230 tests passed, 26/26 files**, 168.97s                                                                                                                               |
+| Worker test suite       | `pnpm --filter @workspace/worker exec vitest run` with explicit owner DB URL               | **16/16 tests passed, 3/3 files**; 7 integration tests skip if the DB URL is absent                                                                                          |
 | Playwright E2E          | `pnpm test:e2e`                                                                            | **10/10 tests passed**; Playwright auto-started `next start` on port 3000                                                                                                    |
 | RLS runtime             | `vitest run src/__tests__/rls-runtime.test.ts`                                             | 5/5 tests: registration, tenant-scoped organization/project access, cross-tenant 404s, zero rows without context, startup accepted                                           |
 | RLS fail-closed startup | `vitest run src/__tests__/rls-startup-fail-closed.test.ts`                                 | 1/1 test: owner/superuser role rejected with `ENFORCE_RLS_RUNTIME=true`                                                                                                      |
@@ -106,13 +113,13 @@ All results below were produced locally against the current working tree.
 
 ### Not verified in this environment
 
-- GitHub Actions execution on GitHub.
-- A real DNS name, certificate, TLS termination, or production host. The local Compose run used HTTP on `localhost`.
-- Real email delivery, Stripe test/live checkout or webhooks, deployment, and backup/restore.
+- A real public DNS name, certificate, TLS termination, or production host. The local Compose run used HTTP on `localhost`.
+- Real email delivery, live Stripe checkout or webhooks, deployment, and backup/restore.
 - Real outbound worker webhook/email delivery against an external endpoint or provider. Only network attachment and local worker startup were verified.
-- A live API-backed browser journey. Playwright still mocks API responses; the container API was exercised with direct HTTP and SQL checks.
+- A production load test, external penetration test, or disaster-recovery drill.
+- Ownership transfer.
 
-The Docker/Compose results above were produced from the current working tree against a throwaway `workspace-verify` project, then the containers, networks, and volumes were removed. They do not constitute a production deployment or a remote CI run.
+The local Docker/Compose results above were produced against a throwaway `workspace-verify` project, then the containers, networks, and volumes were removed. The remote Docker job builds the images but does not deploy them. None of this constitutes a production launch.
 
 ---
 
@@ -169,7 +176,7 @@ The local `docker-compose.yml` also creates `workspace_app` on a fresh volume.
 
 ---
 
-## 5. Priority 2 — CI and E2E (Configured, Locally Verified)
+## 5. Priority 2 — CI and E2E (Remote CI Verified)
 
 `.github/workflows/ci.yml` now:
 
@@ -185,7 +192,9 @@ Test database URLs are environment-driven rather than hardcoded. `apps/api/vites
 
 Playwright starts `next start` through `webServer` when `PLAYWRIGHT_BASE_URL` is not supplied. The specs mock API responses in the browser, so they do not need a live API process.
 
-**Remaining CI gap:** the workflow has not been run on GitHub. Local execution covers the test/build stages, and Docker builds were run separately from the same working tree, but remote Actions behavior and remote Docker layers remain unverified.
+**Remote result (2026-10-27):** run [`40490031815`](https://github.com/Piyush-singh17200/Saas-Website/actions/runs/40490031815) on `eebc35c` passed. The `Lint, Test & Build` job completed all 20 steps, including migrations, the 230-test API suite, the 16-test worker suite, the production build, and Playwright 10/10. The `Build & Validate Docker Images` job built the API, database migration, worker, and web images successfully.
+
+**Remaining work:** none for CI on this commit. A production deployment and the external integrations listed in sections 7–8 are still separate, approval-gated work.
 
 ---
 
@@ -208,11 +217,11 @@ Playwright starts `next start` through `webServer` when `PLAYWRIGHT_BASE_URL` is
 | Security policies & audit logs            | VERIFIED                     | MFA policy, session max age, sanitized metadata, admin audit tests                                                                          |
 | PostgreSQL RLS                            | VERIFIED (local + container) | API tests, startup fail-closed test, and live Compose app-role checks: no-context zero rows, tenant A/B isolation, user-context memberships |
 | Background worker                         | VERIFIED                     | 16/16 tests; startup assertion precedes queue registration; worker starts in Compose and is attached to internal + egress networks          |
-| Web UI                                    | VERIFIED                     | 10/10 mock-based E2E tests; live API-backed browser run not performed                                                                       |
-| Docker images                             | VERIFIED (local)             | API, migrator, worker, and web images built successfully from the current tree                                                              |
+| Web UI                                    | VERIFIED                     | Playwright 10/10 in remote CI; local live API-backed preview showed the seeded project and task                                             |
+| Docker images                             | VERIFIED (local + CI)        | API, migrator, worker, and web images built locally and by GitHub Actions run `40490031815`                                                 |
 | Production Compose stack                  | VERIFIED (local)             | Throwaway stack started in order; migrations/provisioning, readiness, RLS, Nginx, and web build arg checked                                 |
 | TLS / Nginx                               | PARTIAL                      | HTTP proxy, auth prefix, rate limits, and config test verified; no TLS/domain or 443 server block                                           |
-| CI pipeline                               | PARTIAL                      | Workflow repaired and locally simulated; not executed on GitHub                                                                             |
+| CI pipeline                               | VERIFIED (remote)            | GitHub Actions run `40490031815` passed all test/build and Docker-image steps                                                               |
 | Deployment / rollback                     | BLOCKED                      | `deploy.yml` remains a placeholder                                                                                                          |
 | Real email delivery                       | BLOCKED                      | Production API logs dispatches; worker uses in-memory development provider                                                                  |
 | Backup / restore                          | PARTIAL                      | Scripts exist; no restore drill performed                                                                                                   |
@@ -225,8 +234,8 @@ Playwright starts `next start` through `webServer` when `PLAYWRIGHT_BASE_URL` is
 
 | Blocker                    | Why it blocks production                                                                                 | What is needed                                                                                  |
 | -------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| GitHub Actions unverified  | Workflow syntax is valid locally, but remote runner behavior is unproven                                 | Push the branch, run CI, record the workflow URL/result                                         |
 | Production host absent     | Local Compose ran on Windows with HTTP and placeholder secrets; no DNS, TLS, or production secrets exist | Choose a host, provide domain/certificates/secrets, deploy, and repeat the readiness/RLS checks |
+| Launch not approved        | Production deployment, DNS changes, and live billing require explicit owner approval                     | Owner approval, target host, domain, and production secret set                                  |
 | Real email absent          | No production delivery provider                                                                          | Choose Resend/SES, add credentials and adapter, add delivery test, fail startup if missing      |
 | Stripe unusable            | Placeholder keys and price ID; no test-mode checkout/webhook                                             | Provide test credentials, run checkout/webhook, validate entitlements                           |
 | No TLS / ingress           | Nginx is HTTP-only                                                                                       | Domain, certificates, 443 server block, HTTP→HTTPS redirect, ingress test                       |
@@ -239,11 +248,11 @@ Playwright starts `next start` through `webServer` when `PLAYWRIGHT_BASE_URL` is
 
 ## 8. Next Actions
 
-1. **Commit and push this hardening work**, then run `.github/workflows/ci.yml` on GitHub and record the result.
-2. **Repeat the Compose smoke test on a disposable Linux host or CI runner** and record image digests; the local Windows Compose run is complete.
-3. **Priority 3 integrations**, in order: real email provider, Stripe test-mode checkout/webhook, TLS ingress. Each requires credentials/infrastructure.
-4. **Operations**: run a disposable backup/restore drill and replace the placeholder deployment workflow.
-5. **Feature gap**: implement ownership transfer if required before launch.
+1. **Approve a launch target and provide production inputs**: host/VPS or cloud account, public domain, DNS access, TLS certificates or managed certificate, production `DATABASE_URL`/app-role credentials, a unique `MFA_ENCRYPTION_KEY`, Redis, and email/Stripe credentials.
+2. **Deploy to a staging environment first**: run the production Compose stack, apply migrations with the owner role, provision `workspace_app`, verify `/api/v1/ready`, RLS isolation, API-backed browser journeys, and TLS.
+3. **Complete provider integrations**: real email delivery, Stripe test-mode checkout/webhook, then live billing only after explicit approval.
+4. **Operate it**: run a backup/restore drill, configure log retention/monitoring/alerting, and define rollback.
+5. **Close the remaining product gap**: implement and test ownership transfer; commission load and external penetration tests before broad public traffic.
 
 ---
 
@@ -252,8 +261,8 @@ Playwright starts `next start` through `webServer` when `PLAYWRIGHT_BASE_URL` is
 Run from the repository root in PowerShell unless noted.
 
 ```powershell
-# Local disposable PostgreSQL used for this pass
-# PostgreSQL 18 binaries; database on 127.0.0.1:5433
+# Test database: Docker postgres:16 on 127.0.0.1:5433
+# psql client: PostgreSQL 18 binaries
 $env:PGPASSWORD = "workspace_pass"
 $env:DATABASE_URL = "postgresql://workspace_user:workspace_pass@127.0.0.1:5433/workspace_test?schema=public"
 $env:TEST_DATABASE_URL = $env:DATABASE_URL
@@ -269,7 +278,8 @@ $env:TEST_APP_DATABASE_URL = "postgresql://workspace_app:workspace_app_pass@127.
 pnpm --filter @workspace/database exec prisma migrate deploy
 
 $env:MFA_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-$env:ENFORCE_RLS_RUNTIME = "false"
+$env:ENFORCE_RLS_RUNTIME = "true"
+$env:REDIS_URL = "redis://127.0.0.1:6379"
 
 # Static gates
 pnpm format:check
@@ -277,12 +287,12 @@ pnpm lint -- --force
 pnpm turbo typecheck --force
 pnpm turbo build --force
 
-# Test suites
-pnpm --filter @workspace/api exec vitest run
-pnpm --filter @workspace/worker exec vitest run
+# Test suites (root script serializes database-backed packages)
+pnpm test
 pnpm test:e2e
 
-# Docker Desktop / Compose (verified 2026-10-26; throwaway project removed afterward)
+# Local Docker Desktop / Compose (verified 2026-10-26; throwaway project removed afterward)
+# Remote Docker image builds: GitHub Actions run 40490031815 (2026-10-27)
 docker version
 docker compose version
 $env:COMPOSE_FILE = Join-Path $env:TEMP "workspace-compose-verify.env"
@@ -301,7 +311,7 @@ docker compose --env-file $env:COMPOSE_FILE -p workspace-verify -f docker-compos
 python -c "import yaml; [yaml.safe_load(open(f, encoding='utf-8')) for f in ['.github/workflows/ci.yml','docker-compose.yml','docker-compose.prod.yml']]; print('YAML OK')"
 ```
 
-The temporary Compose env file contained placeholders only and was deleted after the run. Docker results are local to this Windows workstation; GitHub Actions still requires a remote and a push.
+The temporary Compose env file contained placeholders only and was deleted after the run. GitHub Actions run `40490031815` is green for code commit `eebc35c`; its Docker job built all four images. No production deployment has been performed.
 
 ---
 
