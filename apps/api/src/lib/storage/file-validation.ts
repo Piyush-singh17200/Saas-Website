@@ -120,8 +120,10 @@ export function sanitizeFileName(rawFileName: string): string {
     return "unnamed-file";
   }
 
-  // Extract base filename without directories
-  const base = path.basename(rawFileName).trim();
+  // Normalize both Windows and POSIX separators before extracting the base
+  // name so traversal sequences behave identically on every platform.
+  const normalized = rawFileName.replace(/\\/g, "/");
+  const base = path.posix.basename(normalized).trim();
 
   // Replace dangerous/invalid characters with underscore
   let sanitized = base.replace(/[^a-zA-Z0-9._-]/g, "_");

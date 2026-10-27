@@ -5,6 +5,15 @@ const testDatabaseUrl =
   process.env.DATABASE_URL ??
   "postgresql://workspace_user:workspace_pass@127.0.0.1:5433/workspace_test?schema=public";
 
+const testAppDatabaseUrl =
+  process.env.TEST_APP_DATABASE_URL ??
+  (() => {
+    const appUrl = new URL(testDatabaseUrl);
+    appUrl.username = "workspace_app";
+    appUrl.password = "workspace_app_pass";
+    return appUrl.toString();
+  })();
+
 export default defineConfig({
   test: {
     globals: true,
@@ -17,6 +26,7 @@ export default defineConfig({
       NODE_ENV: "test",
       DATABASE_URL: testDatabaseUrl,
       TEST_DATABASE_URL: testDatabaseUrl,
+      TEST_APP_DATABASE_URL: testAppDatabaseUrl,
       SESSION_COOKIE_NAME: "workspace_session",
       SESSION_TTL_DAYS: "7",
       COOKIE_SECURE: "false",
