@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ShieldCheck,
   ArrowRight,
@@ -17,6 +18,10 @@ import {
   Plus,
   Play,
 } from "lucide-react";
+import {
+  buildInvitationAuthHref,
+  getSafeInvitationRedirect,
+} from "../lib/invitation-auth";
 
 interface DemoCard {
   id: string;
@@ -63,12 +68,29 @@ const INITIAL_DEMO_CARDS: DemoCard[] = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
   const [cards, setCards] = useState<DemoCard[]>(INITIAL_DEMO_CARDS);
   const [isAnnual, setIsAnnual] = useState(true);
   const [activeTab, setActiveTab] = useState<
     "rls" | "worker" | "security" | "billing"
   >("rls");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  // Older invitation emails linked to the landing page with onboarding query
+  // parameters. Preserve them by handing the visitor to the auth flow instead
+  // of silently dropping the token/email/redirect context.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const redirect = getSafeInvitationRedirect(params.get("redirect"));
+    if (!redirect) return;
+
+    router.replace(
+      buildInvitationAuthHref("/login", {
+        email: params.get("email"),
+        redirect,
+      }),
+    );
+  }, [router]);
 
   const moveCard = (id: string, targetStatus: DemoCard["status"]) => {
     setCards((prev) =>

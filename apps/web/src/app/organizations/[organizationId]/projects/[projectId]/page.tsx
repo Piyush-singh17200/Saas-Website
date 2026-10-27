@@ -40,6 +40,7 @@ import { TaskModal } from "../../../../../components/TaskModal";
 import { TaskDetailModal } from "../../../../../components/TaskDetailModal";
 import { ProjectSettingsModal } from "../../../../../components/ProjectSettingsModal";
 import { TagManagerModal } from "../../../../../components/TagManagerModal";
+import { AccessRestrictedState } from "../../../../../components/AccessRestrictedState";
 
 const KANBAN_COLUMNS: Array<{
   id: "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
@@ -88,6 +89,7 @@ export default function ProjectWorkspacePage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAccessRestricted, setIsAccessRestricted] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // View state: 'kanban' or 'table' (initialized from URL if present)
@@ -193,6 +195,7 @@ export default function ProjectWorkspacePage() {
     try {
       setIsLoading(true);
       setError(null);
+      setIsAccessRestricted(false);
 
       // Current user
       try {
@@ -228,9 +231,18 @@ export default function ProjectWorkspacePage() {
       });
       setTasks(tasksRes.items);
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to load project workspace";
-      setError(msg);
+      if (
+        err instanceof ApiError &&
+        (err.status === 403 || err.status === 404)
+      ) {
+        setIsAccessRestricted(true);
+      } else {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "Failed to load project workspace";
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -503,6 +515,20 @@ export default function ProjectWorkspacePage() {
     HIGH: "bg-amber-500/10 text-amber-400 border-amber-500/30",
     URGENT: "bg-rose-500/10 text-rose-400 border-rose-500/30",
   };
+
+  if (isAccessRestricted) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+        <Navbar activeTab="projects" />
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <AccessRestrictedState
+            backHref={`/organizations/${organizationId}/projects`}
+            backLabel="Back to Projects"
+          />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">

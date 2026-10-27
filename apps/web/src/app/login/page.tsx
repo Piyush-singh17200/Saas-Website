@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Lock,
   Mail,
@@ -13,14 +13,23 @@ import {
   KeyRound,
   Eye,
   EyeOff,
-  Sparkles,
 } from "lucide-react";
 import { apiClient, ApiError } from "../../lib/api-client";
+import {
+  buildInvitationAuthHref,
+  getSafeInvitationRedirect,
+  normalizeInvitationEmail,
+} from "../../lib/invitation-auth";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const emailParam = searchParams.get("email");
+  const redirectParam = searchParams.get("redirect");
+  const safeRedirect = getSafeInvitationRedirect(redirectParam);
+  const initialEmail = normalizeInvitationEmail(emailParam);
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -34,6 +43,26 @@ export default function LoginPage() {
   const [mfaCode, setMfaCode] = useState("");
   const [isUsingRecovery, setIsUsingRecovery] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState("");
+
+  const redirectAfterAuthentication = async () => {
+    if (safeRedirect) {
+      router.push(safeRedirect);
+      return;
+    }
+
+    // Check organizations to redirect
+    try {
+      const orgRes = await apiClient.getOrganizations();
+      const firstOrg = orgRes?.organizations?.[0];
+      if (firstOrg?.id) {
+        router.push(`/organizations/${firstOrg.id}/projects`);
+      } else {
+        router.push("/organizations");
+      }
+    } catch {
+      router.push("/organizations");
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,18 +87,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Check organizations to redirect
-      try {
-        const orgRes = await apiClient.getOrganizations();
-        const firstOrg = orgRes?.organizations?.[0];
-        if (firstOrg?.id) {
-          router.push(`/organizations/${firstOrg.id}/projects`);
-        } else {
-          router.push("/organizations");
-        }
-      } catch {
-        router.push("/organizations");
-      }
+      await redirectAfterAuthentication();
     } catch (err) {
       if (err instanceof ApiError) {
         const errDetails = err.details as any;
@@ -107,13 +125,7 @@ export default function LoginPage() {
         );
       }
 
-      const orgRes = await apiClient.getOrganizations();
-      const firstOrg = orgRes?.organizations?.[0];
-      if (firstOrg?.id) {
-        router.push(`/organizations/${firstOrg.id}/projects`);
-      } else {
-        router.push("/organizations");
-      }
+      await redirectAfterAuthentication();
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message || "Invalid verification code.");
@@ -123,12 +135,6 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const fillDemoAccount = () => {
-    setEmail("alice@workspace.test");
-    setPassword("Password123!");
-    setError(null);
   };
 
   return (
@@ -172,6 +178,23 @@ export default function LoginPage() {
 
           {!mfaChallenge ? (
             <form onSubmit={handleLogin} className="space-y-5">
+              {safeRedirect && (
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>
+                    Sign in
+                    {initialEmail ? (
+                      <>
+                        {" "}
+                        with{" "}
+                        <strong className="text-white">{initialEmail}</strong>
+                      </>
+                    ) : null}{" "}
+                    to continue to your workspace invitation.
+                  </span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5">
                   Email Address
@@ -248,18 +271,6 @@ export default function LoginPage() {
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
-                </button>
-              </div>
-
-              {/* Demo Account Quick-Fill */}
-              <div className="pt-2 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={fillDemoAccount}
-                  className="w-full py-2 px-3 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-xs font-mono text-slate-300 flex items-center justify-center gap-2 transition-colors"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Fill Demo Credentials (Alice)</span>
                 </button>
               </div>
             </form>
@@ -358,7 +369,10 @@ export default function LoginPage() {
           <div className="mt-6 text-center text-xs text-slate-400">
             Don&apos;t have an account?{" "}
             <Link
-              href="/register"
+              href={buildInvitationAuthHref("/register", {
+                email: email || emailParam,
+                redirect: redirectParam,
+              })}
               className="text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-4"
             >
               Sign up for free
@@ -367,5 +381,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { PublicInvitationDetails } from "@workspace/contracts";
 import { apiClient } from "../../../lib/api-client";
+import { buildInvitationAuthHref } from "../../../lib/invitation-auth";
 
 export default function AcceptInvitationPage() {
   const params = useParams();
@@ -104,6 +105,8 @@ export default function AcceptInvitationPage() {
     invitation &&
     currentUser.email.trim().toLowerCase() ===
       invitation.email.trim().toLowerCase();
+
+  const invitationRedirect = `/invitations/${token}`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6">
@@ -208,11 +211,23 @@ export default function AcceptInvitationPage() {
                     to accept this invitation.
                   </p>
                   <Link
-                    href={`/?email=${encodeURIComponent(invitation.email)}&redirect=/invitations/${token}`}
+                    href={buildInvitationAuthHref("/login", {
+                      email: invitation.email,
+                      redirect: invitationRedirect,
+                    })}
                     className="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-emerald-500/20"
                   >
-                    <span>Sign In or Register to Accept</span>
+                    <span>Sign In to Accept</span>
                     <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                  <Link
+                    href={buildInvitationAuthHref("/register", {
+                      email: invitation.email,
+                      redirect: invitationRedirect,
+                    })}
+                    className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors border border-slate-700"
+                  >
+                    <span>Create an Account</span>
                   </Link>
                 </div>
               ) : isEmailMatching ? (

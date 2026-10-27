@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Plus,
@@ -19,14 +19,15 @@ import type {
   ProjectResponse,
   CreateProjectInput,
   OrganizationResponse,
+  MembershipRoleType,
 } from "@workspace/contracts";
 import { apiClient, ApiError } from "../../../../lib/api-client";
 import { Navbar } from "../../../../components/Navbar";
 import { ProjectModal } from "../../../../components/ProjectModal";
+import { AccessRestrictedState } from "../../../../components/AccessRestrictedState";
 
 export default function OrganizationProjectsPage() {
   const params = useParams();
-  const router = useRouter();
   const organizationId = params.organizationId as string;
 
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
@@ -35,7 +36,9 @@ export default function OrganizationProjectsPage() {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isPermissionDenied, setIsPermissionDenied] = useState(false);
+  const [isAccessRestricted, setIsAccessRestricted] = useState(false);
+  const [currentUserRole, setCurrentUserRole] =
+    useState<MembershipRoleType | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "ARCHIVED" | "">(
@@ -61,7 +64,7 @@ export default function OrganizationProjectsPage() {
     try {
       setIsLoading(true);
       setError(null);
-      setIsPermissionDenied(false);
+      setIsAccessRestricted(false);
 
       // Fetch org info
       try {
@@ -69,6 +72,21 @@ export default function OrganizationProjectsPage() {
         setOrganization(org);
       } catch {
         // Fallback if user is just member
+      }
+
+      // Resolve the signed-in user's role so lifecycle controls are only shown
+      // to roles the API actually authorizes. Failure hides the controls.
+      try {
+        const [me, membersRes] = await Promise.all([
+          apiClient.getMe(),
+          apiClient.getMembers(organizationId),
+        ]);
+        const membership = membersRes.members.find(
+          (member) => member.userId === me.user.id,
+        );
+        setCurrentUserRole(membership?.role ?? null);
+      } catch {
+        setCurrentUserRole(null);
       }
 
       // Fetch projects
@@ -79,8 +97,13 @@ export default function OrganizationProjectsPage() {
       });
       setProjects(res.items);
     } catch (err: unknown) {
-      if (err instanceof ApiError && err.status === 403) {
-        setIsPermissionDenied(true);
+      // A cross-tenant 404 and a genuine 403 intentionally share the same
+      // non-disclosing state.
+      if (
+        err instanceof ApiError &&
+        (err.status === 403 || err.status === 404)
+      ) {
+        setIsAccessRestricted(true);
       } else {
         const msg =
           err instanceof Error ? err.message : "Failed to load projects";
@@ -130,6 +153,20 @@ export default function OrganizationProjectsPage() {
     }
   };
 
+  const canManageProjectLifecycle =
+    currentUserRole === "OWNER" || currentUserRole === "ADMIN";
+
+  if (isAccessRestricted) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+        <Navbar activeTab="projects" />
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <AccessRestrictedState />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       <Navbar
@@ -139,25 +176,6 @@ export default function OrganizationProjectsPage() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Permission Denied Banner */}
-        {isPermissionDenied && (
-          <div className="mb-8 p-6 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300">
-            <h3 className="text-lg font-semibold text-rose-200 mb-1">
-              Access Restricted
-            </h3>
-            <p className="text-sm text-rose-300/80 mb-4">
-              You do not have active membership in this organization or lack
-              permission to view projects.
-            </p>
-            <button
-              onClick={() => router.push("/")}
-              className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold"
-            >
-              Back to Home
-            </button>
-          </div>
-        )}
-
         {/* Header & Create Project CTA */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
           <div>
@@ -294,29 +312,30 @@ export default function OrganizationProjectsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {project.status === "ACTIVE" ? (
-                        <button
-                          type="button"
-                          disabled={isActionLoading === project.id}
-                          onClick={() => handleArchiveProject(project.id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition-colors"
-                          title="Archive project"
-                          aria-label="Archive project"
-                        >
-                          <Archive className="w-3.5 h-3.5" />
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={isActionLoading === project.id}
-                          onClick={() => handleRestoreProject(project.id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
-                          title="Restore project"
-                          aria-label="Restore project"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      {canManageProjectLifecycle &&
+                        (project.status === "ACTIVE" ? (
+                          <button
+                            type="button"
+                            disabled={isActionLoading === project.id}
+                            onClick={() => handleArchiveProject(project.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition-colors"
+                            title="Archive project"
+                            aria-label="Archive project"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isActionLoading === project.id}
+                            onClick={() => handleRestoreProject(project.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
+                            title="Restore project"
+                            aria-label="Restore project"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        ))}
 
                       <Link
                         href={`/organizations/${organizationId}/projects/${project.id}`}

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Lock,
   Mail,
@@ -14,12 +14,22 @@ import {
   EyeOff,
 } from "lucide-react";
 import { apiClient, ApiError } from "../../lib/api-client";
+import {
+  buildInvitationAuthHref,
+  getSafeInvitationRedirect,
+  normalizeInvitationEmail,
+} from "../../lib/invitation-auth";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const emailParam = searchParams.get("email");
+  const redirectParam = searchParams.get("redirect");
+  const safeRedirect = getSafeInvitationRedirect(redirectParam);
+  const initialEmail = normalizeInvitationEmail(emailParam);
 
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +56,11 @@ export default function RegisterPage() {
         email,
         password,
       });
+
+      if (safeRedirect) {
+        router.push(safeRedirect);
+        return;
+      }
 
       // Upon registration, auto-login or redirect to organizations
       try {
@@ -108,6 +123,17 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleRegister} className="space-y-4">
+            {initialEmail && safeRedirect && (
+              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-start gap-2.5">
+                <Mail className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <span>
+                  Your invitation was sent to{" "}
+                  <strong className="text-white">{initialEmail}</strong>.
+                  Register with that email to accept it.
+                </span>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Full Name
@@ -203,7 +229,10 @@ export default function RegisterPage() {
           <div className="mt-6 pt-4 border-t border-slate-800 text-center text-xs text-slate-400">
             Already registered?{" "}
             <Link
-              href="/login"
+              href={buildInvitationAuthHref("/login", {
+                email: email || emailParam,
+                redirect: redirectParam,
+              })}
               className="text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-4"
             >
               Sign in to your account
@@ -212,5 +241,19 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+        </div>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }
